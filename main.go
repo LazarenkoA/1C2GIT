@@ -104,6 +104,8 @@ func main() {
 		wg.Add(1)
 		go start(wg, r, rep)
 	}
+
+	fmt.Printf("Запуск ОК. Уровень логирования - %d", LogLevel)
 	wg.Wait()
 }
 
@@ -154,7 +156,7 @@ func inilogrus() *time.Ticker {
 	createNewDir := func() string {
 		dir := filepath.Join(currentDir, "Logs", time.Now().Format("02.01.2006"))
 		if _, err := os.Stat(dir); os.IsNotExist(err) {
-			os.Mkdir(dir, os.ModePerm)
+			os.MkdirAll(dir, os.ModePerm)
 		}
 		return dir
 	}
