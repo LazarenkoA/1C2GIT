@@ -117,9 +117,15 @@ func start(wg *sync.WaitGroup, r *RepositoryConf, rep *ConfigurationRepository.R
 		return
 	}
 
+	logrus.WithField("Хранилище 1С", r.GetRepPath()).Debugf("Таймер по %d минут", r.TimerMinute)
 	timer := time.NewTicker(time.Minute * time.Duration(r.TimerMinute))
 	for range timer.C {
 		lastVersion := GetLastVersion(r.GetRepPath())
+
+		logrus.WithField("Хранилище 1С", r.GetRepPath()).
+			WithField("Начальная версия", lastVersion).
+			Debug("Старт выгрузки")
+
 		err, report := rep.GetReport(r, r.To.RepDir, lastVersion+1)
 		if err != nil {
 			logrus.WithField("Репозиторий", r.GetRepPath()).Error("Ошибка получения отчета по хранилищу")
