@@ -105,7 +105,7 @@ func main() {
 		go start(wg, r, rep)
 	}
 
-	fmt.Printf("Запуск ОК. Уровень логирования - %d", LogLevel)
+	fmt.Printf("Запуск ОК. Уровень логирования - %d\n\r", LogLevel)
 	wg.Wait()
 }
 
@@ -119,14 +119,14 @@ func start(wg *sync.WaitGroup, r *RepositoryConf, rep *ConfigurationRepository.R
 
 	logrus.WithField("Хранилище 1С", r.GetRepPath()).Debugf("Таймер по %d минут", r.TimerMinute)
 	timer := time.NewTicker(time.Minute * time.Duration(r.TimerMinute))
-	for range timer.C {
+	for time := range timer.C {
 		lastVersion := GetLastVersion(r.GetRepPath())
 
 		logrus.WithField("Хранилище 1С", r.GetRepPath()).
 			WithField("Начальная версия", lastVersion).
 			Debug("Старт выгрузки")
 
-		err, report := rep.GetReport(r, r.To.RepDir, lastVersion+1)
+		err, report := rep.GetReport(r, r.GetOutDir(), lastVersion+1)
 		if err != nil {
 			logrus.WithField("Репозиторий", r.GetRepPath()).Error("Ошибка получения отчета по хранилищу")
 			continue
@@ -135,21 +135,26 @@ func start(wg *sync.WaitGroup, r *RepositoryConf, rep *ConfigurationRepository.R
 			continue
 		}
 		for _, _report := range report {
+			// Очищаем каталог перед выгрузкой, это нужно на случай если удаляется какой-то объект
+			os.RemoveAll(r.GetOutDir())
+
 			if err := rep.DownloadConfFiles(r, _report.Version); err != nil {
 				logrus.WithField("Выгружаемая версия", _report.Version).
 					WithField("Репозиторий", r.GetRepPath()).
 					Error("Ошибка выгрузки файлов из хранилища")
 				break
 			} else {
-				git := new(git.Git).New(r.To.RepDir)
+				git := new(git.Git).New(r.GetOutDir())
 				if err := git.CommitAndPush(_report, mapUser, r.To.Branch); err != nil {
 					logrus.Errorf("Ошибка при выполнении Push: %v", err)
 				}
-
 				SeveLastVersion(r.GetRepPath(), _report.Version)
 			}
+
 		}
 
+		logrus.WithField("Время", time).Debug("Синхронизация выполнена")
+		fmt.Printf("Синхронизация %v выполнена. Время %v\n\r", r.GetRepPath(), time)
 	}
 }
 

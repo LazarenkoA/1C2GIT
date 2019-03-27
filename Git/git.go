@@ -96,6 +96,22 @@ func (g *Git) Push() (err error) {
 	}
 }
 
+func (g *Git) Add() (err error) {
+	logrus.WithField("Каталог", g.repDir).Debug("Add")
+
+	if _, err = os.Stat(g.repDir); os.IsNotExist(err) {
+		err = fmt.Errorf("Каталог %q Git репозитория не найден", g.repDir)
+		logrus.WithField("Каталог", g.repDir).Error(err)
+	}
+
+	cmd := exec.Command("git", "add", ".")
+	if err, _ := g.run(cmd, g.repDir); err != nil {
+		return err
+	} else {
+		return nil
+	}
+}
+
 func (g *Git) CommitAndPush(data ICommit, mapUser map[string]string, branch string) (err error) {
 	logrus.WithField("Каталог", g.repDir).Debug("CommitAndPush")
 
@@ -104,10 +120,12 @@ func (g *Git) CommitAndPush(data ICommit, mapUser map[string]string, branch stri
 		logrus.WithField("Каталог", g.repDir).Error(err)
 	}
 
+	g.Add()
+
 	param := []string{}
 	param = append(param, "commit")
-	param = append(param, "-a")
-	param = append(param, "--amend")
+	//param = append(param, "-a")
+	//param = append(param, "--amend")
 	param = append(param, fmt.Sprintf("--date=%v", data.GetDateTime().Format("2006.01.02 15:04:05")))
 
 	coment := data.GetComment()
@@ -123,6 +141,7 @@ func (g *Git) CommitAndPush(data ICommit, mapUser map[string]string, branch stri
 		param = append(param, fmt.Sprintf("--author=%q", author))
 	}
 	param = append(param, fmt.Sprintf("-m %v", coment))
+	param = append(param, strings.Replace(g.repDir, "\\", "/", -1)) // strings.Replace(g.repDir, "\\", "/", -1)
 	cmdCommit := exec.Command("git", param...)
 	g.run(cmdCommit, g.repDir)
 
