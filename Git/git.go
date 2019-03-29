@@ -13,19 +13,48 @@ import (
 
 type Git struct {
 	repDir string
+	data   I1CCommit
+	author string
+	env    map[string]string
 	//gitBin string // если стоит git, то в системной переменной path будет путь к git
 }
 
-type ICommit interface {
+type I1CCommit interface {
 	GetComment() string
 	GetAuthor() string
 	GetDateTime() *time.Time
 }
 
 // New - конструктор
-func (g *Git) New(repDir string) *Git {
+func (g *Git) New(repDir string, data I1CCommit, mapUser map[string]string) *Git {
 	g.repDir = repDir
+	g.data = data
+
+	g.author = mapUser[g.data.GetAuthor()]
+	if g.author == "" {
+		g.author = mapUser["Default"]
+	}
+
+	g.env = make(map[string]string, 0) // что бы в Destroy вернуть то что было
+	g.env["GIT_AUTHOR_NAME"] = os.Getenv("GIT_AUTHOR_NAME")
+	g.env["GIT_COMMITTER_NAME"] = os.Getenv("GIT_COMMITTER_NAME")
+	g.env["GIT_AUTHOR_EMAIL"] = os.Getenv("GIT_AUTHOR_EMAIL")
+	g.env["GIT_COMMITTER_EMAIL"] = os.Getenv("GIT_COMMITTER_EMAIL")
+
+	parts := strings.SplitN(g.author, " ", 2)
+	// говорят, что лучше указывать переменные окружения для коммитов
+	os.Setenv("GIT_AUTHOR_NAME", strings.Trim(parts[0], " "))
+	os.Setenv("GIT_COMMITTER_NAME", strings.Trim(parts[0], " "))
+	os.Setenv("GIT_AUTHOR_EMAIL", strings.Trim(parts[1], " "))
+	os.Setenv("GIT_COMMITTER_EMAIL", strings.Trim(parts[1], " "))
+
 	return g
+}
+
+func (g *Git) Destroy() {
+	for k, v := range g.env {
+		os.Setenv(k, v)
+	}
 }
 
 func (g *Git) checkout(branch string) error {
@@ -112,7 +141,23 @@ func (g *Git) Add() (err error) {
 	}
 }
 
-func (g *Git) CommitAndPush(data ICommit, mapUser map[string]string, branch string) (err error) {
+func (g *Git) optimization() (err error) {
+	logrus.WithField("Каталог", g.repDir).Debug("Add")
+
+	if _, err = os.Stat(g.repDir); os.IsNotExist(err) {
+		err = fmt.Errorf("Каталог %q Git репозитория не найден", g.repDir)
+		logrus.WithField("Каталог", g.repDir).Error(err)
+	}
+
+	cmd := exec.Command("git", "gc", "--auto")
+	if err, _ := g.run(cmd, g.repDir); err != nil {
+		return err
+	} else {
+		return nil
+	}
+}
+
+func (g *Git) CommitAndPush(branch string) (err error) {
 	logrus.WithField("Каталог", g.repDir).Debug("CommitAndPush")
 
 	if _, err = os.Stat(g.repDir); os.IsNotExist(err) {
@@ -121,32 +166,26 @@ func (g *Git) CommitAndPush(data ICommit, mapUser map[string]string, branch stri
 	}
 
 	g.Add()
+	date := g.data.GetDateTime().Format("2006.01.02 15:04:05")
 
 	param := []string{}
 	param = append(param, "commit")
 	//param = append(param, "-a")
-	//param = append(param, "--amend")
-	param = append(param, fmt.Sprintf("--date=%v", data.GetDateTime().Format("2006.01.02 15:04:05")))
-
-	coment := data.GetComment()
-	if coment == "" {
-		coment = fmt.Sprintf("Коммит без комментария")
+	param = append(param, "--allow-empty-message")
+	param = append(param, fmt.Sprintf("--cleanup=verbatim"))
+	param = append(param, fmt.Sprintf("--date=%v", date))
+	if g.author != "" {
+		param = append(param, fmt.Sprintf("--author=%q", g.author))
 	}
-
-	author := mapUser[data.GetAuthor()]
-	if author == "" {
-		author = mapUser["Default"]
-	}
-	if author != "" {
-		param = append(param, fmt.Sprintf("--author=%q", author))
-	}
-	param = append(param, fmt.Sprintf("-m %v", coment))
+	param = append(param, fmt.Sprintf("-m %v", g.data.GetComment()))
 	param = append(param, strings.Replace(g.repDir, "\\", "/", -1)) // strings.Replace(g.repDir, "\\", "/", -1)
+
 	cmdCommit := exec.Command("git", param...)
 	g.run(cmdCommit, g.repDir)
 
 	g.Pull(branch)
 	g.Push()
+	g.optimization()
 
 	return nil
 }
@@ -163,14 +202,12 @@ func (g *Git) run(cmd *exec.Cmd, dir string) (error, string) {
 
 	err := cmd.Run()
 	stderr := string(cmd.Stderr.(*bytes.Buffer).Bytes())
-	if stderr != "" {
-		errText := fmt.Sprintf("Произошла ошибка запуска:\nStdErr:%q", stderr)
-		//logrus.Error(errText)
-		return fmt.Errorf(errText), ""
-	}
 	if err != nil {
-		errText := fmt.Sprintf("Произошла ошибка запуска:\nerr:%q", string(err.Error()))
-		//logrus.Error(errText)
+		errText := fmt.Sprintf("Произошла ошибка запуска:\n err:%q \n", string(err.Error()))
+		if stderr != "" {
+			errText += fmt.Sprintf("StdErr:%q \n", stderr)
+		}
+		logrus.Error(errText)
 		return fmt.Errorf(errText), ""
 	}
 

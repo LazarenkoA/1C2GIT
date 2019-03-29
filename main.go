@@ -99,17 +99,18 @@ func main() {
 	//defer rep.Destroy()
 	rep.BinPath = s.Bin1C
 
+	mu := new(sync.Mutex)
 	wg := new(sync.WaitGroup)
 	for _, r := range s.RepositoryConf {
 		wg.Add(1)
-		go start(wg, r, rep)
+		go start(wg, mu, r, rep)
 	}
 
 	fmt.Printf("Запуск ОК. Уровень логирования - %d\n\r", LogLevel)
 	wg.Wait()
 }
 
-func start(wg *sync.WaitGroup, r *RepositoryConf, rep *ConfigurationRepository.Repository) {
+func start(wg *sync.WaitGroup, mu *sync.Mutex, r *RepositoryConf, rep *ConfigurationRepository.Repository) {
 	defer wg.Done()
 
 	if r.TimerMinute <= 0 {
@@ -144,10 +145,20 @@ func start(wg *sync.WaitGroup, r *RepositoryConf, rep *ConfigurationRepository.R
 					Error("Ошибка выгрузки файлов из хранилища")
 				break
 			} else {
-				git := new(git.Git).New(r.GetOutDir())
-				if err := git.CommitAndPush(_report, mapUser, r.To.Branch); err != nil {
-					logrus.Errorf("Ошибка при выполнении Push: %v", err)
-				}
+				// с гитом лучше не работать параллельно, там меняются переменные окружения
+				mu.Lock()
+
+				// т.к. нет try catch, извращаемся как можем
+				func() {
+					git := new(git.Git).New(r.GetOutDir(), _report, mapUser)
+					defer git.Destroy()
+
+					if err := git.CommitAndPush(r.To.Branch); err != nil {
+						logrus.Errorf("Ошибка при выполнении Push: %v", err)
+					}
+				}()
+
+				mu.Unlock()
 				SeveLastVersion(r.GetRepPath(), _report.Version)
 			}
 
