@@ -16,6 +16,7 @@ import (
 	"sync"
 	"time"
 
+
 	"github.com/sirupsen/logrus"
 )
 
@@ -95,7 +96,7 @@ func main() {
 		settings.ReadSettings(mapFile, &mapUser)
 	}
 
-	rep := new(ConfigurationRepository.Repository)
+	rep := new(ConfigurationRepository.Repository).New()
 	//defer rep.Destroy()
 	rep.BinPath = s.Bin1C
 
@@ -129,7 +130,7 @@ func start(wg *sync.WaitGroup, mu *sync.Mutex, r *RepositoryConf, rep *Configura
 
 		err, report := rep.GetReport(r, r.GetOutDir(), lastVersion+1)
 		if err != nil {
-			logrus.WithField("Репозиторий", r.GetRepPath()).Error("Ошибка получения отчета по хранилищу")
+			logrus.WithField("Репозиторий", r.GetRepPath()).Errorf("Ошибка получения отчета по хранилищу %v", err)
 			continue
 		}
 		if len(report) == 0 {

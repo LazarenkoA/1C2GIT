@@ -48,32 +48,40 @@ func (r *RepositoryInfo) GetDateTime() *time.Time {
 	return &r.Date
 }
 
-func (rep *Repository) createTmpFile() string {
+func (this *Repository) New() *Repository {
+	//this.uuid, _ = uuid.NewV4()
+	return this
+}
 
+func (this *Repository) createTmpFile() string {
 	fileLog, err := ioutil.TempFile("", "OutLog_")
+
 	defer fileLog.Close() // Закрываем иначе в него 1С не сможет записать
 
 	if err != nil {
-		panic(fmt.Errorf("Ошибка получения временого файла:\n %v", err))
+		panic(fmt.Errorf("Ошибка получения временного файла:\n %v", err))
 	}
-
 	return fileLog.Name()
 }
 
 // CreateTmpBD метод создает временную базу данных
-func (rep *Repository) createTmpBD(createExtension bool) (error, string) {
+func (this *Repository) createTmpBD(createExtension bool) (error, string) {
+	tmpDBPath, _ := ioutil.TempDir("", "1c_DB_")
+
 	defer func() {
 		if er := recover(); er != nil {
 			logrus.Error(fmt.Errorf("Произошла ошибка при создании временной базы: %v", er))
+			os.RemoveAll(tmpDBPath)
 		}
 	}()
 
-	fileLog := rep.createTmpFile()
+	fileLog := this.createTmpFile()
 	defer os.Remove(fileLog)
+	cmd := exec.Command(this.BinPath, "CREATEINFOBASE", fmt.Sprintf("File=%v", tmpDBPath), fmt.Sprintf("/OUT  %v", fileLog))
 
-	tmpDBPath, _ := ioutil.TempDir("", "1c_DB_")
-	cmd := exec.Command(rep.BinPath, "CREATEINFOBASE", fmt.Sprintf("File=%v", tmpDBPath), fmt.Sprintf("/OUT  %v", fileLog))
-	rep.run(cmd, fileLog)
+	if err := this.run(cmd, fileLog); err != nil {
+		logrus.Panic(err)
+	}
 
 	if createExtension {
 		currentDir, _ := os.Getwd()
@@ -89,14 +97,18 @@ func (rep *Repository) createTmpBD(createExtension bool) (error, string) {
 		param = append(param, fmt.Sprintf("/LoadCfg %v", Ext))
 		param = append(param, "-Extension temp")
 		param = append(param, fmt.Sprintf("/OUT  %v", fileLog))
-		cmd := exec.Command(rep.BinPath, param...)
-		rep.run(cmd, fileLog)
+		cmd := exec.Command(this.BinPath, param...)
+
+		if err := this.run(cmd, fileLog); err != nil {
+			logrus.WithError(err).Panic("Ошибка загрузки расширения в базу.")
+		}
 	}
 
+	logrus.Warning("выход")
 	return nil, tmpDBPath
 }
 
-func (rep *Repository) DownloadConfFiles(DataRep IRepository, version int) (err error) {
+func (this *Repository) DownloadConfFiles(DataRep IRepository, version int) (err error) {
 	defer func() {
 		if er := recover(); er != nil {
 			err = fmt.Errorf("Произошла ошибка при сохранении конфигурации конфигурации в файлы: %v", er)
@@ -106,26 +118,25 @@ func (rep *Repository) DownloadConfFiles(DataRep IRepository, version int) (err 
 	logrus.Debug("Сохраняем конфигурацию в файлы")
 
 	var tmpDBPath string
-	if err, tmpDBPath = rep.createTmpBD(DataRep.IsExtension()); err != nil {
+	if err, tmpDBPath = this.createTmpBD(DataRep.IsExtension()); err != nil {
 		return err
-	} else {
-		defer os.RemoveAll(tmpDBPath)
 	}
+	defer os.RemoveAll(tmpDBPath)
 
 	// ПОДКЛЮЧАЕМ к ХРАНИЛИЩУ и ОБНОВЛЯЕМ ДО ОПРЕДЕЛЕННОЙ ВЕРСИИ
-	rep.ConfigurationRepositoryBindCfg(DataRep, tmpDBPath, version)
+	this.ConfigurationRepositoryBindCfg(DataRep, tmpDBPath, version)
 
 	// ОБНОВЛЯЕМ ДО ОПРЕДЕЛЕННОЙ ВЕРСИИ
 	//rep.ConfigurationRepositoryUpdateCfg(DataRep, tmpDBPath, version)
 
 	// СОХРАНЯЕМ В ФАЙЛЫ
-	rep.DumpConfigToFiles(DataRep, tmpDBPath)
+	this.DumpConfigToFiles(DataRep, tmpDBPath)
 
 	return nil
 }
 
-func (rep *Repository) ConfigurationRepositoryBindCfg(DataRep IRepository, fileDBPath string, version int) {
-	fileLog := rep.createTmpFile()
+func (this *Repository) ConfigurationRepositoryBindCfg(DataRep IRepository, fileDBPath string, version int) {
+	fileLog := this.createTmpFile()
 	defer os.Remove(fileLog)
 
 	param := []string{}
@@ -151,11 +162,13 @@ func (rep *Repository) ConfigurationRepositoryBindCfg(DataRep IRepository, fileD
 	}
 
 	param = append(param, fmt.Sprintf("/OUT %v", fileLog))
-	rep.run(exec.Command(rep.BinPath, param...), fileLog)
+	if err := this.run(exec.Command(this.BinPath, param...), fileLog); err != nil {
+		logrus.Panic(err)
+	}
 }
 
-func (rep *Repository) ConfigurationRepositoryUpdateCfg(DataRep IRepository, fileDBPath string, version int) {
-	fileLog := rep.createTmpFile()
+func (this *Repository) ConfigurationRepositoryUpdateCfg(DataRep IRepository, fileDBPath string, version int) {
+	fileLog := this.createTmpFile()
 	defer os.Remove(fileLog)
 
 	param := []string{}
@@ -171,11 +184,13 @@ func (rep *Repository) ConfigurationRepositoryUpdateCfg(DataRep IRepository, fil
 		param = append(param, "-Extension temp")
 	}
 	param = append(param, fmt.Sprintf("/OUT %v", fileLog))
-	rep.run(exec.Command(rep.BinPath, param...), fileLog)
+	if err := this.run(exec.Command(this.BinPath, param...), fileLog); err != nil {
+		logrus.Panic(err)
+	}
 }
 
-func (rep *Repository) DumpConfigToFiles(DataRep IRepository, fileDBPath string) {
-	fileLog := rep.createTmpFile()
+func (this *Repository) DumpConfigToFiles(DataRep IRepository, fileDBPath string) {
+	fileLog := this.createTmpFile()
 	defer os.Remove(fileLog)
 
 	param := []string{}
@@ -188,13 +203,15 @@ func (rep *Repository) DumpConfigToFiles(DataRep IRepository, fileDBPath string)
 		param = append(param, "-Extension temp")
 	}
 	param = append(param, fmt.Sprintf("/OUT %v", fileLog))
-	rep.run(exec.Command(rep.BinPath, param...), fileLog)
+	if err := this.run(exec.Command(this.BinPath, param...), fileLog); err != nil {
+		logrus.Panic(err)
+	}
 }
 
-func (rep *Repository) GetReport(DataRep IRepository, DitOut string, version int) (error, []*RepositoryInfo) {
+func (this *Repository) GetReport(DataRep IRepository, DitOut string, version int) (error, []*RepositoryInfo) {
 	result := []*RepositoryInfo{}
 
-	report := rep.saveReport(DataRep, version)
+	report := this.saveReport(DataRep, version)
 	if report == "" {
 		return fmt.Errorf("Не удалось получить отчет по хранилищу"), result
 	}
@@ -246,7 +263,7 @@ func (rep *Repository) GetReport(DataRep IRepository, DitOut string, version int
 	return nil, result
 }
 
-func (rep *Repository) saveReport(DataRep IRepository, versionStart int) string {
+func (this *Repository) saveReport(DataRep IRepository, versionStart int) string {
 	defer func() {
 		if er := recover(); er != nil {
 			logrus.Error(fmt.Errorf("Произошла ошибка при получении истории из хранилища: %v", er))
@@ -255,15 +272,16 @@ func (rep *Repository) saveReport(DataRep IRepository, versionStart int) string 
 
 	logrus.Debug("Сохраняем отчет конфигурации в файл")
 
-	fileLog := rep.createTmpFile()
-	fileResult := rep.createTmpFile()
+	fileLog := this.createTmpFile()
+	fileResult := this.createTmpFile()
 	defer os.Remove(fileLog)
 	defer os.Remove(fileResult)
 
-	/* if rep.tmpDBPath == "" {
-		_, rep.tmpDBPath = rep.createTmpBD(DataRep.IsExtension())
-	} */
-	_, tmpDBPath := rep.createTmpBD(DataRep.IsExtension())
+	err, tmpDBPath := this.createTmpBD(DataRep.IsExtension())
+	if err != nil {
+		logrus.WithError(err).Errorf("Произошла ошибка создания временной базы.")
+		return ""
+	}
 	defer os.RemoveAll(tmpDBPath)
 
 	param := []string{}
@@ -284,8 +302,10 @@ func (rep *Repository) saveReport(DataRep IRepository, versionStart int) string 
 	}
 	param = append(param, fmt.Sprintf("/OUT %v", fileLog))
 
-	cmd := exec.Command(rep.BinPath, param...)
-	rep.run(cmd, fileLog)
+	cmd := exec.Command(this.BinPath, param...)
+	if err := this.run(cmd, fileLog); err != nil {
+		logrus.Panic(err)
+	}
 
 	if err, bytes := ReadFile(fileResult, nil); err == nil {
 		return string(*bytes)
@@ -295,12 +315,24 @@ func (rep *Repository) saveReport(DataRep IRepository, versionStart int) string 
 	}
 }
 
-func (rep *Repository) Destroy() {
+func (this *Repository) Destroy() {
 	//os.RemoveAll(rep.tmpDBPath)
 }
 
-func (rep *Repository) run(cmd *exec.Cmd, fileLog string) {
-	logrus.WithField("Исполняемый файл", cmd.Path).WithField("Параметры", cmd.Args).Debug("Выполняется команда пакетного запуска")
+func (this *Repository) run(cmd *exec.Cmd, fileLog string) (err error) {
+	defer func() {
+		if er := recover(); er != nil {
+			err = fmt.Errorf("%v", er)
+			logrus.
+				WithField("Параметры", cmd.Args).
+				Errorf("Произошла ошибка при выполнении %q", cmd.Path)
+		}
+	}()
+
+	logrus.
+		WithField("Исполняемый файл", cmd.Path).
+		WithField("Параметры", cmd.Args).
+		Debug("Выполняется команда пакетного запуска")
 
 	//cmd.Stdin = strings.NewReader("some input")
 	cmd.Stdout = new(bytes.Buffer)
@@ -315,16 +347,20 @@ func (rep *Repository) run(cmd *exec.Cmd, fileLog string) {
 		}
 	}
 
-	err := cmd.Run()
+	err = cmd.Run()
 	stderr := string(cmd.Stderr.(*bytes.Buffer).Bytes())
 	if err != nil {
-		errText := fmt.Sprintf("Произошла ошибка запуска:\nerr: %q \nOutErrFile: %q", string(err.Error()), readErrFile())
-		logrus.Panic(errText)
+		logrus.Panic(fmt.Errorf("Произошла ошибка запуска:"+
+			"err: %q"+
+			"OutErrFile: %q", string(err.Error()), readErrFile())) // в defer перехват
 	}
 	if stderr != "" {
-		errText := fmt.Sprintf("Произошла ошибка запуска:\nStdErr: %q \nOutErrFile: %q", stderr, readErrFile())
-		logrus.Panic(errText)
+		logrus.Panic(fmt.Errorf("Произошла ошибка запуска:"+
+			"StdErr: %q"+
+			"OutErrFile: %q", stderr, readErrFile())) // в defer перехват
 	}
+
+	return nil
 }
 
 //////////////// Common ///////////////////////
