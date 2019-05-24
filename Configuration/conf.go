@@ -104,7 +104,6 @@ func (this *Repository) createTmpBD(createExtension bool) (error, string) {
 		}
 	}
 
-	logrus.Warning("выход")
 	return nil, tmpDBPath
 }
 
