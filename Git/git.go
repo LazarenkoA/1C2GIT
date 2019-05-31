@@ -165,7 +165,9 @@ func (g *Git) CommitAndPush(branch string) (err error) {
 		logrus.WithField("Каталог", g.repDir).Error(err)
 	}
 
+	g.checkout(branch)
 	g.Add()
+
 	date := g.data.GetDateTime().Format("2006.01.02 15:04:05")
 
 	param := []string{}
@@ -201,7 +203,7 @@ func (g *Git) run(cmd *exec.Cmd, dir string) (error, string) {
 	cmd.Stderr = new(bytes.Buffer)
 
 	err := cmd.Run()
-	stderr := string(cmd.Stderr.(*bytes.Buffer).Bytes())
+	stderr := cmd.Stderr.(*bytes.Buffer).String()
 	if err != nil {
 		errText := fmt.Sprintf("Произошла ошибка запуска:\n err:%q \n", string(err.Error()))
 		if stderr != "" {
@@ -211,5 +213,5 @@ func (g *Git) run(cmd *exec.Cmd, dir string) (error, string) {
 		return fmt.Errorf(errText), ""
 	}
 
-	return nil, string(cmd.Stdout.(*bytes.Buffer).Bytes())
+	return nil, cmd.Stdout.(*bytes.Buffer).String()
 }
