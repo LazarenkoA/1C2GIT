@@ -35,7 +35,7 @@ func (g *Git) New(repDir string, data I1CCommit, mapUser map[string]string) *Git
 		g.author = mapUser["Default"]
 	}
 
-	g.env = make(map[string]string, 0) // что бы в Destroy вернуть то что было
+	g.env = make(map[string]string) // что бы в Destroy вернуть то что было
 	g.env["GIT_AUTHOR_NAME"] = os.Getenv("GIT_AUTHOR_NAME")
 	g.env["GIT_COMMITTER_NAME"] = os.Getenv("GIT_COMMITTER_NAME")
 	g.env["GIT_AUTHOR_EMAIL"] = os.Getenv("GIT_AUTHOR_EMAIL")
