@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -241,7 +242,8 @@ func (this *Repository) GetReport(DataRep IRepository, DitOut string, version in
 			case "Комментарий:":
 				// Комментария может не быть, по этому вот такой костыльчик
 				if array[id+1] != "Изменены:" {
-					RepInfo.Comment = array[id+1]
+					RepInfo.Comment = strings.Replace(array[id+1], "\n", " ", -1)
+					RepInfo.Comment = strings.Replace(RepInfo.Comment, "\r", "", -1)
 				}
 			case "Дата создания:":
 				if t, err := time.Parse("02.01.2006", array[id+1]); err == nil {
@@ -256,6 +258,7 @@ func (this *Repository) GetReport(DataRep IRepository, DitOut string, version in
 				}
 			}
 		}
+		RepInfo.Comment = fmt.Sprintf("(%v) %v", RepInfo.Version, RepInfo.Comment)
 		result = append(result, RepInfo)
 	}
 
@@ -347,7 +350,7 @@ func (this *Repository) run(cmd *exec.Cmd, fileLog string) (err error) {
 	}
 
 	err = cmd.Run()
-	stderr := string(cmd.Stderr.(*bytes.Buffer).Bytes())
+	stderr := cmd.Stderr.(*bytes.Buffer).String()
 	if err != nil {
 		logrus.Panic(fmt.Errorf("Произошла ошибка запуска:"+
 			"err: %q"+
