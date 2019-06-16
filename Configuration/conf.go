@@ -242,7 +242,7 @@ func (this *Repository) GetReport(DataRep IRepository, DitOut string, version in
 			case "Комментарий:":
 				// Комментария может не быть, по этому вот такой костыльчик
 				if array[id+1] != "Изменены:" {
-					RepInfo.Comment = strings.Replace(array[id+1], "\n", " ", -1)
+					//RepInfo.Comment = strings.Replace(array[id+1], "\n", " ", -1)
 					RepInfo.Comment = strings.Replace(RepInfo.Comment, "\r", "", -1)
 				}
 			case "Дата создания:":
@@ -258,7 +258,9 @@ func (this *Repository) GetReport(DataRep IRepository, DitOut string, version in
 				}
 			}
 		}
-		RepInfo.Comment = fmt.Sprintf("(%v) %v", RepInfo.Version, RepInfo.Comment)
+		RepInfo.Comment = fmt.Sprintf("Хранилище: %v\n"+
+			"Версия: %v\n"+
+			"Коментарий: %q", DataRep.GetRepPath(), RepInfo.Version, RepInfo.Comment)
 		result = append(result, RepInfo)
 	}
 

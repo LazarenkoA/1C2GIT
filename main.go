@@ -85,7 +85,7 @@ func main() {
 	defer DeleleEmptyFile(logrus.StandardLogger().Out.(*os.File))
 
 	s := new(setting)
-	mapUser = make(map[string]string, 0)
+	mapUser = make(map[string]string)
 	settings.ReadSettings(path.Join("Confs", "Config.conf"), s)
 
 	mapFile := path.Join("Confs", "MapUsers.conf")
@@ -118,9 +118,7 @@ func start(wg *sync.WaitGroup, mu *sync.Mutex, r *RepositoryConf, rep *Configura
 		return
 	}
 
-	logrus.WithField("Хранилище 1С", r.GetRepPath()).Debugf("Таймер по %d минут", r.TimerMinute)
-	timer := time.NewTicker(time.Minute * time.Duration(r.TimerMinute))
-	for time := range timer.C {
+	invoke := func(time time.Time) {
 		lastVersion := GetLastVersion(r.GetRepPath())
 
 		logrus.WithField("Хранилище 1С", r.GetRepPath()).
@@ -130,10 +128,11 @@ func start(wg *sync.WaitGroup, mu *sync.Mutex, r *RepositoryConf, rep *Configura
 		err, report := rep.GetReport(r, r.GetOutDir(), lastVersion+1)
 		if err != nil {
 			logrus.WithField("Репозиторий", r.GetRepPath()).Errorf("Ошибка получения отчета по хранилищу %v", err)
-			continue
+			return
 		}
 		if len(report) == 0 {
-			continue
+			logrus.WithField("Репозиторий", r.GetRepPath()).Debug("Репозиторий пустой")
+			return
 		}
 		for _, _report := range report {
 			// Очищаем каталог перед выгрузкой, это нужно на случай если удаляется какой-то объект
@@ -166,6 +165,13 @@ func start(wg *sync.WaitGroup, mu *sync.Mutex, r *RepositoryConf, rep *Configura
 
 		logrus.WithField("Время", time).Debug("Синхронизация выполнена")
 		fmt.Printf("Синхронизация %v выполнена. Время %v\n\r", r.GetRepPath(), time)
+	}
+
+	logrus.WithField("Хранилище 1С", r.GetRepPath()).Debugf("Таймер по %d минут", r.TimerMinute)
+	timer := time.NewTicker(time.Minute * time.Duration(r.TimerMinute))
+	invoke(time.Now()) // ервый раз при запуске, потом будет по таймеру. Сделано так, что бы не ждать наступления события при запуске
+	for time := range timer.C {
+		invoke(time)
 	}
 }
 
@@ -214,6 +220,13 @@ func DeleleEmptyFile(file *os.File) {
 		if err := os.Remove(file.Name()); err != nil {
 			logrus.WithError(err).WithField("Файл", file.Name()).Error("Ошибка удаления пустого файла логов")
 		}
+	}
+
+	// Для каталога, если  пустой, то зачем он нам
+	if !info.IsDir() { // Защита от рекурсии
+		dirPath, _ := filepath.Split(file.Name())
+		dir, _ := os.OpenFile(dirPath, -1, os.ModeDir)
+		DeleleEmptyFile(dir)
 	}
 }
 
