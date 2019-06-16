@@ -189,6 +189,7 @@ func inilogrus() *time.Ticker {
 		return dir
 	}
 
+	
 	Log1, _ := os.OpenFile(filepath.Join(createNewDir(), "Log_"+time.Now().Format("15.04.05")), os.O_CREATE, os.ModeAppend)
 	logrus.SetOutput(Log1)
 
@@ -225,7 +226,7 @@ func DeleleEmptyFile(file *os.File) {
 	// Для каталога, если  пустой, то зачем он нам
 	if !info.IsDir() { // Защита от рекурсии
 		dirPath, _ := filepath.Split(file.Name())
-		dir, _ := os.OpenFile(dirPath, -1, os.ModeDir)
+		dir, _ := os.OpenFile(dirPath, os.O_RDONLY, os.ModeDir)
 		DeleleEmptyFile(dir)
 	}
 }
