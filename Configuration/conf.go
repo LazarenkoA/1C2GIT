@@ -243,7 +243,7 @@ func (this *Repository) GetReport(DataRep IRepository, DitOut string, version in
 				// Комментария может не быть, по этому вот такой костыльчик
 				if array[id+1] != "Изменены:" {
 					//RepInfo.Comment = strings.Replace(array[id+1], "\n", " ", -1)
-					RepInfo.Comment = strings.Replace(RepInfo.Comment, "\r", "", -1)
+					RepInfo.Comment = strings.Replace(array[id+1], "\r", "", -1)
 				}
 			case "Дата создания:":
 				if t, err := time.Parse("02.01.2006", array[id+1]); err == nil {

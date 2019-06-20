@@ -189,7 +189,6 @@ func inilogrus() *time.Ticker {
 		return dir
 	}
 
-	
 	Log1, _ := os.OpenFile(filepath.Join(createNewDir(), "Log_"+time.Now().Format("15.04.05")), os.O_CREATE, os.ModeAppend)
 	logrus.SetOutput(Log1)
 
@@ -219,15 +218,25 @@ func DeleleEmptyFile(file *os.File) {
 		file.Close()
 
 		if err := os.Remove(file.Name()); err != nil {
-			logrus.WithError(err).WithField("Файл", file.Name()).Error("Ошибка удаления пустого файла логов")
+			logrus.WithError(err).WithField("Файл", file.Name()).Error("Ошибка удаления файла")
 		}
 	}
 
 	// Для каталога, если  пустой, то зачем он нам
 	if !info.IsDir() { // Защита от рекурсии
 		dirPath, _ := filepath.Split(file.Name())
-		dir, _ := os.OpenFile(dirPath, os.O_RDONLY, os.ModeDir)
-		DeleleEmptyFile(dir)
+
+		// Если в текущем каталоге нет файлов, пробуем удалить его
+		files, err := ioutil.ReadDir(dirPath)
+		if err != nil {
+			logrus.WithError(err).WithField("Каталог", dirPath).Error("Ошибка получения списка файлов в каталоге")
+			return
+		}
+
+		if len(files) == 0 {
+			dir, _ := os.OpenFile(dirPath, os.O_RDONLY, os.ModeDir)
+			DeleleEmptyFile(dir)
+		}
 	}
 }
 
