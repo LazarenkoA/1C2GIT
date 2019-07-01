@@ -212,11 +212,9 @@ func (this *Repository) GetReport(DataRep IRepository, DitOut string, version in
 	result := []*RepositoryInfo{}
 
 	report := this.saveReport(DataRep, version)
-	fmt.Println(report)
 	if report == "" {
 		return fmt.Errorf("Не удалось получить отчет по хранилищу"), result
 	}
-
 
 	// Двойные кавычки в комментарии мешают, по этому мы заменяем из на одинарные
 	report = strings.Replace(report, "\"\"", "'", -1)
