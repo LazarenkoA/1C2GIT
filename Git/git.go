@@ -32,7 +32,9 @@ func (g *Git) New(repDir string, data I1CCommit, mapUser map[string]string) *Git
 
 	g.author = mapUser[g.data.GetAuthor()]
 	if g.author == "" {
-		g.author = mapUser["Default"]
+		if g.author = mapUser["Default"]; g.author == "" {
+			logrus.Panic("В конфиге MapUsers.conf не определен Default пользователь")
+		}
 	}
 
 	g.env = make(map[string]string) // что бы в Destroy вернуть то что было
