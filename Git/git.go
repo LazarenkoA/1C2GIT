@@ -30,8 +30,7 @@ func (g *Git) New(repDir string, data I1CCommit, mapUser map[string]string) *Git
 	g.repDir = repDir
 	g.data = data
 
-	g.author = mapUser[g.data.GetAuthor()]
-	if g.author == "" {
+	if g.author = mapUser[g.data.GetAuthor()]; g.author == "" {
 		if g.author = mapUser["Default"]; g.author == "" {
 			logrus.Panic("В конфиге MapUsers.conf не определен Default пользователь")
 		}
