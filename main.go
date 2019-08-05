@@ -4,6 +4,7 @@ import (
 	ConfigurationRepository "1C2GIT/Configuration"
 	settings "1C2GIT/Confs"
 	git "1C2GIT/Git"
+	"bufio"
 	"crypto/sha1"
 	"flag"
 	"fmt"
@@ -11,12 +12,14 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/sirupsen/logrus"
+	xmlpath "gopkg.in/xmlpath.v2"
 )
 
 var mapUser map[string]string
@@ -34,9 +37,10 @@ type to struct {
 }
 
 type RepositoryConf struct {
-	TimerMinute int   `json:"TimerMinute"`
-	From        *from `json:"From"`
-	To          *to   `json:"To"`
+	TimerMinute int    `json:"TimerMinute"`
+	From        *from  `json:"From"`
+	To          *to    `json:"To"`
+	version     string // для хранения версии конфигурации
 }
 
 type setting struct {
@@ -47,6 +51,7 @@ type setting struct {
 func (r *RepositoryConf) GetRepPath() string {
 	return r.From.Rep
 }
+
 func (r *RepositoryConf) GetLogin() string {
 	return r.From.Login
 }
@@ -135,6 +140,10 @@ func start(wg *sync.WaitGroup, mu *sync.Mutex, r *RepositoryConf, rep *Configura
 			return
 		}
 		for _, _report := range report {
+
+			// Запоминаем версию конфигурации. Сделано это потому что версия инерементируется в файлах, а не в хранилище 1С, что бы не перезатиралось.
+			// TODO: подумать как обыграть это в настройках, а-ля файлы исключения, для xml файлов можно прикрутить xpath, что бы сохранять значение определенных узлов (как раз наш случай с версией)
+			r.saveVersion()
 			// Очищаем каталог перед выгрузкой, это нужно на случай если удаляется какой-то объект
 			os.RemoveAll(r.GetOutDir())
 
@@ -147,11 +156,12 @@ func start(wg *sync.WaitGroup, mu *sync.Mutex, r *RepositoryConf, rep *Configura
 				// с гитом лучше не работать параллельно, там меняются переменные окружения
 				mu.Lock()
 
-				// т.к. нет try catch, извращаемся как можем
+				// анонимная функция исключительно из-за defer, аналог try - catch
 				func() {
 					git := new(git.Git).New(r.GetOutDir(), _report, mapUser)
 					defer git.Destroy()
 
+					r.restoreVersion() // восстанавливаем версию перед коммитом
 					if err := git.CommitAndPush(r.To.Branch); err != nil {
 						logrus.Errorf("Ошибка при выполнении Push: %v", err)
 					}
@@ -169,9 +179,82 @@ func start(wg *sync.WaitGroup, mu *sync.Mutex, r *RepositoryConf, rep *Configura
 
 	logrus.WithField("Хранилище 1С", r.GetRepPath()).Debugf("Таймер по %d минут", r.TimerMinute)
 	timer := time.NewTicker(time.Minute * time.Duration(r.TimerMinute))
-	invoke(time.Now()) // ервый раз при запуске, потом будет по таймеру. Сделано так, что бы не ждать наступления события при запуске
+	invoke(time.Now()) // первый раз при запуске, потом будет по таймеру. Сделано так, что бы не ждать наступления события при запуске
 	for time := range timer.C {
 		invoke(time)
+	}
+}
+
+func (this *RepositoryConf) saveVersion() {
+	ConfigurationFile := path.Join(this.To.RepDir, "Configuration.xml")
+	if _, err := os.Stat(ConfigurationFile); os.IsNotExist(err) {
+		logrus.WithField("Файл", ConfigurationFile).WithField("Репозиторий", this.GetRepPath()).Error("Конфигурационный файл не существует")
+		return
+	}
+
+	file, err := os.Open(ConfigurationFile)
+	if err != nil {
+		logrus.WithField("Файл", ConfigurationFile).WithField("Репозиторий", this.GetRepPath()).Errorf("Ошибка открытия: %q", err)
+		return
+	}
+	defer file.Close()
+
+	xmlroot, xmlerr := xmlpath.Parse(bufio.NewReader(file))
+	if xmlerr != nil {
+		logrus.WithField("Файл", ConfigurationFile).Errorf("Ошибка чтения xml: %q", xmlerr.Error())
+		return
+	}
+
+	path := xmlpath.MustCompile("MetaDataObject/Configuration/Properties/Version/text()")
+	if value, ok := path.String(xmlroot); ok {
+		this.version = value
+	} else {
+		// значит версии нет, установим начальную
+		this.version = "1.0.0"
+		logrus.WithField("Файл", ConfigurationFile).Debugf("В файле не было версии, установили %q", this.version)
+	}
+
+}
+
+func (this *RepositoryConf) restoreVersion() {
+	ConfigurationFile := path.Join(this.To.RepDir, "Configuration.xml")
+	if _, err := os.Stat(ConfigurationFile); os.IsNotExist(err) {
+		logrus.WithField("Файл", ConfigurationFile).WithField("Репозиторий", this.GetRepPath()).Error("Конфигурационный файл не существует")
+		return
+	}
+
+	// Меняем версию, без парсинга, поменять значение одного узла прям проблема, а повторять структуру xml в классе ой как не хочется
+	// Читаем файл
+	file, err := os.Open(ConfigurationFile)
+	if err != nil {
+		logrus.WithField("Файл", ConfigurationFile).Errorf("Ошибка открытия файла: %q", err)
+		return
+	}
+
+	stat, _ := file.Stat()
+	buf := make([]byte, stat.Size())
+	if _, err = file.Read(buf); err != nil {
+		logrus.WithField("Файл", ConfigurationFile).Errorf("Ошибка чтения файла: %q", err)
+		return
+	}
+	file.Close()
+	os.Remove(ConfigurationFile)
+
+	xml := string(buf)
+	reg := regexp.MustCompile(`(?i)(?:<Version>(.+?)<\/Version>|<Version\/>)`)
+	xml = reg.ReplaceAllString(xml, "<Version>"+this.version+"</Version>")
+
+	// сохраняем файл
+	file, err = os.OpenFile(ConfigurationFile, os.O_CREATE, os.ModeExclusive)
+	if err != nil {
+		logrus.WithField("Файл", ConfigurationFile).Errorf("Ошибка создания: %q", err)
+		return
+	}
+	defer file.Close()
+
+	if _, err := file.WriteString(xml); err != nil {
+		logrus.WithField("Файл", ConfigurationFile).Errorf("Ошибка записи: %q", err)
+		return
 	}
 }
 

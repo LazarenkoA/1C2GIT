@@ -143,7 +143,7 @@ func (g *Git) Add() (err error) {
 }
 
 func (g *Git) optimization() (err error) {
-	logrus.WithField("Каталог", g.repDir).Debug("Add")
+	logrus.WithField("Каталог", g.repDir).Debug("optimization")
 
 	if _, err = os.Stat(g.repDir); os.IsNotExist(err) {
 		err = fmt.Errorf("Каталог %q Git репозитория не найден", g.repDir)
@@ -168,6 +168,7 @@ func (g *Git) CommitAndPush(branch string) (err error) {
 
 	g.checkout(branch)
 	g.Add()
+	g.Pull(branch)
 
 	date := g.data.GetDateTime().Format("2006.01.02 15:04:05")
 
@@ -181,12 +182,11 @@ func (g *Git) CommitAndPush(branch string) (err error) {
 		param = append(param, fmt.Sprintf("--author=%q", g.author))
 	}
 	param = append(param, fmt.Sprintf("-m %v", g.data.GetComment()))
-	param = append(param, strings.Replace(g.repDir, "\\", "/", -1)) // strings.Replace(g.repDir, "\\", "/", -1)
+	param = append(param, strings.Replace(g.repDir, "\\", "/", -1)) 
 
 	cmdCommit := exec.Command("git", param...)
 	g.run(cmdCommit, g.repDir)
 
-	g.Pull(branch)
 	g.Push()
 	g.optimization()
 
