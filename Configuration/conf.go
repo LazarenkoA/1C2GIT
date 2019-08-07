@@ -21,6 +21,7 @@ import (
 // "C:\Program Files\1cv8\8.3.13.1513\bin\1cv8.exe" DESIGNER /IBName БГУ /N Администратор /ConfigurationRepositoryF tcp://10.4.135.216/PTG_Common /ConfigurationRepositoryN Lazarenko /ConfigurationRepositoryP 1478951 /ConfigurationRepositoryBindCfg -Extension tmp -forceBindAlreadyBindedUser -forceReplaceCfg /OUT C:\!\1.txt
 // "C:\Program Files\1cv8\8.3.13.1513\bin\1cv8.exe" DESIGNER /IBName БГУ /N Администратор /ConfigurationRepositoryF tcp://10.4.135.216/PTG_Common /ConfigurationRepositoryN Lazarenko /ConfigurationRepositoryP 1478951 /ConfigurationRepositoryLock -Extension tmp -objects C:\!\objects.xml /OUT C:\!\1.txt
 // "C:\Program Files\1cv8\8.3.13.1513\bin\1cv8.exe" DESIGNER /DisableStartupDialogs /IBName БГУ /N Администратор /DumpConfigToFiles C:\!\ConfFiles -Extension tmp  /OUT C:\!\1.txt
+// "C:\Program Files\1cv8\8.3.13.1513\bin\1cv8.exe" DESIGNER /DisableStartupDialogs /IBName БГУ /N Администратор /LoadConfigFromFiles C:\!\ConfFiles -Extension tmp  /OUT C:\!\1.txt
 type Repository struct {
 	BinPath string
 	//tmpDBPath string

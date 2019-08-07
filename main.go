@@ -24,23 +24,19 @@ import (
 
 var mapUser map[string]string
 
-type from struct {
-	Rep       string `json:"Rep"`
-	Login     string `json:"Login"`
-	Pass      string `json:"Pass"`
-	Extension bool   `json:"Extension"`
-}
-
-type to struct {
-	RepDir string `json:"RepDir"`
-	Branch string `json:"Branch"`
-}
-
 type RepositoryConf struct {
-	TimerMinute int    `json:"TimerMinute"`
-	From        *from  `json:"From"`
-	To          *to    `json:"To"`
-	version     string // для хранения версии конфигурации
+	TimerMinute int `json:"TimerMinute"`
+	From        *struct {
+		Rep       string `json:"Rep"`
+		Login     string `json:"Login"`
+		Pass      string `json:"Pass"`
+		Extension bool   `json:"Extension"`
+	} `json:"From"`
+	To *struct {
+		RepDir string `json:"RepDir"`
+		Branch string `json:"Branch"`
+	} `json:"To"`
+	version string // для хранения версии конфигурации
 }
 
 type setting struct {
