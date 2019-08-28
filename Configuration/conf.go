@@ -341,8 +341,7 @@ func (this *Repository) run(cmd *exec.Cmd, fileLog string) (err error) {
 		}
 	}()
 
-	logrus.
-		WithField("Исполняемый файл", cmd.Path).
+	logrus.WithField("Исполняемый файл", cmd.Path).
 		WithField("Параметры", cmd.Args).
 		Debug("Выполняется команда пакетного запуска")
 
@@ -362,12 +361,12 @@ func (this *Repository) run(cmd *exec.Cmd, fileLog string) (err error) {
 	err = cmd.Run()
 	stderr := cmd.Stderr.(*bytes.Buffer).String()
 	if err != nil {
-		logrus.Panic(fmt.Errorf("Произошла ошибка запуска:"+
+		logrus.WithField("Исполняемый файл", cmd.Path).Panic(fmt.Errorf("Произошла ошибка запуска:"+
 			"err: %q"+
 			"OutErrFile: %q", string(err.Error()), readErrFile())) // в defer перехват
 	}
 	if stderr != "" {
-		logrus.Panic(fmt.Errorf("Произошла ошибка запуска:"+
+		logrus.WithField("Исполняемый файл", cmd.Path).Panic(fmt.Errorf("Произошла ошибка запуска:"+
 			"StdErr: %q"+
 			"OutErrFile: %q", stderr, readErrFile())) // в defer перехват
 	}

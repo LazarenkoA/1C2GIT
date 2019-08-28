@@ -182,7 +182,7 @@ func (g *Git) CommitAndPush(branch string) (err error) {
 		param = append(param, fmt.Sprintf("--author=%q", g.author))
 	}
 	param = append(param, fmt.Sprintf("-m %v", g.data.GetComment()))
-	param = append(param, strings.Replace(g.repDir, "\\", "/", -1)) 
+	param = append(param, strings.Replace(g.repDir, "\\", "/", -1))
 
 	cmdCommit := exec.Command("git", param...)
 	g.run(cmdCommit, g.repDir)
@@ -210,7 +210,7 @@ func (g *Git) run(cmd *exec.Cmd, dir string) (error, string) {
 		if stderr != "" {
 			errText += fmt.Sprintf("StdErr:%q \n", stderr)
 		}
-		logrus.Error(errText)
+		logrus.WithField("Исполняемый файл", cmd.Path).Error(errText)
 		return fmt.Errorf(errText), ""
 	}
 
