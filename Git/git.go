@@ -205,9 +205,9 @@ func (g *Git) run(cmd *exec.Cmd, dir string) (error, string) {
 	err := cmd.Run()
 	stderr := cmd.Stderr.(*bytes.Buffer).String()
 	if err != nil {
-		errText := fmt.Sprintf("Произошла ошибка запуска:\n err:%q \n", string(err.Error()))
+		errText := fmt.Sprintf("Произошла ошибка запуска:\n err:%v \n", string(err.Error()))
 		if stderr != "" {
-			errText += fmt.Sprintf("StdErr:%q \n", stderr)
+			errText += fmt.Sprintf("StdErr:%v \n", stderr)
 		}
 		logrus.WithField("Исполняемый файл", cmd.Path).Error(errText)
 		return fmt.Errorf(errText), ""
