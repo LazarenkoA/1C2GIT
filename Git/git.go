@@ -58,7 +58,7 @@ func (g *Git) Destroy() {
 	}
 }
 
-func (g *Git) checkout(branch string) error {
+func (g *Git) Сheckout(branch string) error {
 	logrus.WithField("Каталог", g.repDir).Debug("checkout")
 
 	cmd := exec.Command("git", "checkout", branch)
@@ -78,7 +78,7 @@ func (g *Git) Pull(branch string) (err error) {
 	}
 
 	if branch != "" {
-		g.checkout(branch)
+		g.Сheckout(branch)
 	}
 
 	cmd := exec.Command("git", "pull")
@@ -166,7 +166,6 @@ func (g *Git) CommitAndPush(branch string) (err error) {
 		logrus.WithField("Каталог", g.repDir).Error(err)
 	}
 
-	g.checkout(branch)
 	g.Add()
 	g.Pull(branch)
 

@@ -136,41 +136,42 @@ func start(wg *sync.WaitGroup, mu *sync.Mutex, r *RepositoryConf, rep *Configura
 			return
 		}
 		for _, _report := range report {
+			// анонимная функция исключительно из-за defer, аналог try - catch
+			func() {
+				git := new(git.Git).New(r.GetOutDir(), _report, mapUser)
+				defer git.Destroy()
 
-			// Запоминаем версию конфигурации. Сделано это потому что версия инерементируется в файлах, а не в хранилище 1С, что бы не перезатиралось.
-			// TODO: подумать как обыграть это в настройках, а-ля файлы исключения, для xml файлов можно прикрутить xpath, что бы сохранять значение определенных узлов (как раз наш случай с версией)
-			r.saveVersion()
-			// Очищаем каталог перед выгрузкой, это нужно на случай если удаляется какой-то объект
-			os.RemoveAll(r.GetOutDir())
+				if err = git.Сheckout(r.To.Branch); err != nil {
+					return // если ветку не смогли переключить, логируемся и выходим, инчаче мы не в ту ветку закоммитим
+				}
 
-			if err := rep.DownloadConfFiles(r, _report.Version); err != nil {
-				logrus.WithField("Выгружаемая версия", _report.Version).
-					WithField("Репозиторий", r.GetRepPath()).
-					Error("Ошибка выгрузки файлов из хранилища")
-				break
-			} else {
-				// с гитом лучше не работать параллельно, там меняются переменные окружения
-				mu.Lock()
+				// Запоминаем версию конфигурации. Сделано это потому что версия инерементируется в файлах, а не в хранилище 1С, что бы не перезатиралось.
+				// TODO: подумать как обыграть это в настройках, а-ля файлы исключения, для xml файлов можно прикрутить xpath, что бы сохранять значение определенных узлов (как раз наш случай с версией)
+				r.saveVersion()
+				// Очищаем каталог перед выгрузкой, это нужно на случай если удаляется какой-то объект
+				os.RemoveAll(r.GetOutDir())
 
-				// анонимная функция исключительно из-за defer, аналог try - catch
-				func() {
-					git := new(git.Git).New(r.GetOutDir(), _report, mapUser)
-					defer git.Destroy()
-
+				if err := rep.DownloadConfFiles(r, _report.Version); err != nil {
+					logrus.WithField("Выгружаемая версия", _report.Version).
+						WithField("Репозиторий", r.GetRepPath()).
+						Error("Ошибка выгрузки файлов из хранилища")
+					return
+				} else {
+					// с гитом лучше не работать параллельно, там меняются переменные окружения, по этому коммитим последовательно
+					mu.Lock()
 					r.restoreVersion() // восстанавливаем версию перед коммитом
 					if err := git.CommitAndPush(r.To.Branch); err != nil {
 						logrus.Errorf("Ошибка при выполнении Push: %v", err)
 					}
-				}()
 
-				mu.Unlock()
-				SeveLastVersion(r.GetRepPath(), _report.Version)
-			}
+					mu.Unlock()
+					SeveLastVersion(r.GetRepPath(), _report.Version)
+				}
 
+				logrus.WithField("Время", time).Debug("Синхронизация выполнена")
+				fmt.Printf("Синхронизация %v выполнена. Время %v\n\r", r.GetRepPath(), time)
+			}()
 		}
-
-		logrus.WithField("Время", time).Debug("Синхронизация выполнена")
-		fmt.Printf("Синхронизация %v выполнена. Время %v\n\r", r.GetRepPath(), time)
 	}
 
 	logrus.WithField("Хранилище 1С", r.GetRepPath()).Debugf("Таймер по %d минут", r.TimerMinute)
