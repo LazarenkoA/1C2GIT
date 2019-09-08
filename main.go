@@ -5,10 +5,14 @@ import (
 	settings "1C2GIT/Confs"
 	git "1C2GIT/Git"
 	"bufio"
+	"context"
 	"crypto/sha1"
+	"encoding/json"
 	"flag"
 	"fmt"
+	"html/template"
 	"io/ioutil"
+	"net/http"
 	"os"
 	"path"
 	"path/filepath"
@@ -18,6 +22,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/gorilla/websocket"
 	"github.com/sirupsen/logrus"
 	xmlpath "gopkg.in/xmlpath.v2"
 )
@@ -43,6 +48,13 @@ type setting struct {
 	Bin1C          string            `json:"Bin1C"`
 	RepositoryConf []*RepositoryConf `json:"RepositoryConf"`
 }
+
+const (
+	info byte = iota
+	err
+
+	ListenPort string = "2020"
+)
 
 func (r *RepositoryConf) GetRepPath() string {
 	return r.From.Rep
@@ -73,17 +85,26 @@ func (h *Hook) Levels() []logrus.Level {
 	return []logrus.Level{logrus.ErrorLevel, logrus.PanicLevel}
 }
 func (h *Hook) Fire(En *logrus.Entry) error {
-	fmt.Println(En.Message)
+	writeInfo(En.Message, err)
 	return nil
 }
 
 var (
 	LogLevel int
+	logBufer []map[string]interface{}
+	logchan  chan map[string]interface{}
 )
 
 func main() {
 	defer inilogrus().Stop()
 	defer DeleleEmptyFile(logrus.StandardLogger().Out.(*os.File))
+
+	logchan = make(chan map[string]interface{}, 10)
+
+	mu := new(sync.Mutex)
+	wg := new(sync.WaitGroup)
+
+	httpInitialise()
 
 	s := new(setting)
 	mapUser = make(map[string]string)
@@ -99,16 +120,94 @@ func main() {
 	rep := new(ConfigurationRepository.Repository).New()
 	//defer rep.Destroy()
 	rep.BinPath = s.Bin1C
-
-	mu := new(sync.Mutex)
-	wg := new(sync.WaitGroup)
 	for _, r := range s.RepositoryConf {
 		wg.Add(1)
 		go start(wg, mu, r, rep)
 	}
 
-	fmt.Printf("Запуск ОК. Уровень логирования - %d\n\r", LogLevel)
+	fmt.Printf("Запуск ОК. Уровень логирования - %d\n", LogLevel)
+	go func() {
+		timer := time.NewTicker(time.Second * 5)
+		for range timer.C {
+			writeInfo(fmt.Sprintf("%v", time.Now()), info)
+		}
+	}()
+
 	wg.Wait()
+}
+
+func httpInitialise() {
+	go http.ListenAndServe(":"+ListenPort, nil)
+	fmt.Printf("Слушаем порт http %v\n", ListenPort)
+
+	tmpl := template.Must(template.ParseFiles("html/index.html"))
+	var upgrader = websocket.Upgrader{
+		ReadBufferSize:  1024,
+		WriteBufferSize: 1024,
+		CheckOrigin: func(r *http.Request) bool {
+			return true
+		},
+	}
+
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		tmpl.Execute(w, logBufer)
+	})
+
+	// статический контент
+	staticHandler := http.StripPrefix(
+		"/img/",
+		http.FileServer(http.Dir("html/img")),
+	)
+	http.Handle("/img/", staticHandler)
+
+	// Пояснение:
+	// эта горутина нужна что бы читать из канала до того пока не загрузится http страничка (notifications)
+	// потому как только тогда стартует чтение из канала, а если не читать из канала, у нас все выполнение застопорится
+	// Сделано так, что при выполнении обработчика страницы notifications через контекст останавливается горутина
+	ctx, cansel := context.WithCancel(context.Background())
+	go func() {
+	exit:
+		for range logchan {
+			select {
+			case <-ctx.Done():
+				break exit
+			default:
+				continue
+			}
+		}
+	}()
+
+	once := new(sync.Once)
+	http.HandleFunc("/notifications", func(w http.ResponseWriter, r *http.Request) {
+		ws, err := upgrader.Upgrade(w, r, nil)
+		if err != nil {
+			logrus.Panic(err)
+		}
+
+		go sendNewMsgNotifications(ws)
+
+		// что б не запускалось при каждой перезагрузки страницы
+		once.Do(func() {
+			cansel()
+		})
+	})
+}
+
+func writeInfo(str string, t byte) {
+	fmt.Println(str)
+
+	data := map[string]interface{}{
+		"msg":  str,
+		"type": t,
+	}
+
+	// сохраняем 10 последних запесей
+	if len(logBufer) == 10 {
+		logBufer = logBufer[1 : len(logBufer)-1] // Удаляем первый элемент
+	}
+	// нужно на первое место поставить элемент
+	logBufer = append([]map[string]interface{}{data}, logBufer...)
+	logchan <- data
 }
 
 func start(wg *sync.WaitGroup, mu *sync.Mutex, r *RepositoryConf, rep *ConfigurationRepository.Repository) {
@@ -159,18 +258,21 @@ func start(wg *sync.WaitGroup, mu *sync.Mutex, r *RepositoryConf, rep *Configura
 				} else {
 					// с гитом лучше не работать параллельно, там меняются переменные окружения, по этому коммитим последовательно
 					mu.Lock()
-					r.restoreVersion() // восстанавливаем версию перед коммитом
-					if err := git.CommitAndPush(r.To.Branch); err != nil {
-						logrus.Errorf("Ошибка при выполнении Push: %v", err)
-					}
+					func() {
+						defer mu.Unlock()
 
-					mu.Unlock()
+						r.restoreVersion() // восстанавливаем версию перед коммитом
+						if err := git.CommitAndPush(r.To.Branch); err != nil {
+							logrus.Errorf("Ошибка при выполнении push & commit: %v", err)
+						}
+					}()
+
 					SeveLastVersion(r.GetRepPath(), _report.Version)
+					logrus.WithField("Время", time).Debug("Синхронизация выполнена")
+					writeInfo(fmt.Sprintf("Синхронизация %v выполнена. Время %v\n\r", r.GetRepPath(), time), info)
 				}
-
-				logrus.WithField("Время", time).Debug("Синхронизация выполнена")
-				fmt.Printf("Синхронизация %v выполнена. Время %v\n\r", r.GetRepPath(), time)
 			}()
+
 		}
 	}
 
@@ -182,7 +284,23 @@ func start(wg *sync.WaitGroup, mu *sync.Mutex, r *RepositoryConf, rep *Configura
 	}
 }
 
+func sendNewMsgNotifications(client *websocket.Conn) {
+	for Ldata := range logchan {
+		w, err := client.NextWriter(websocket.TextMessage)
+		if err != nil {
+			logrus.Errorf("Ошибка записи сокета: %v", err)
+			break
+		}
+
+		data, _ := json.Marshal(Ldata)
+		w.Write(data)
+		w.Close()
+	}
+}
+
 func (this *RepositoryConf) saveVersion() {
+	logrus.WithField("Репозиторий", this.To.RepDir).WithField("Версия", this.version).Debug("Сохраняем версию расширения")
+
 	ConfigurationFile := path.Join(this.To.RepDir, "Configuration.xml")
 	if _, err := os.Stat(ConfigurationFile); os.IsNotExist(err) {
 		logrus.WithField("Файл", ConfigurationFile).WithField("Репозиторий", this.GetRepPath()).Error("Конфигурационный файл не существует")
@@ -214,6 +332,8 @@ func (this *RepositoryConf) saveVersion() {
 }
 
 func (this *RepositoryConf) restoreVersion() {
+	logrus.WithField("Репозиторий", this.To.RepDir).WithField("Версия", this.version).Debug("Восстанавливаем версию расширения")
+
 	ConfigurationFile := path.Join(this.To.RepDir, "Configuration.xml")
 	if _, err := os.Stat(ConfigurationFile); os.IsNotExist(err) {
 		logrus.WithField("Файл", ConfigurationFile).WithField("Репозиторий", this.GetRepPath()).Error("Конфигурационный файл не существует")
@@ -328,6 +448,8 @@ func GetHash(Str string) string {
 }
 
 func GetLastVersion(RepPath string) int {
+	logrus.WithField("Репозиторий", RepPath).Debug("Получаем последнюю версию коммита")
+
 	currentDir, _ := os.Getwd()
 	part := strings.Split(RepPath, "\\")
 	if len(part) == 1 { // значит путь с разделителем "/"
@@ -342,6 +464,8 @@ func GetLastVersion(RepPath string) int {
 
 	if errRead, versionStr := ConfigurationRepository.ReadFile(filePath, nil); errRead == nil {
 		V := string(*versionStr)
+		logrus.WithField("Репозиторий", RepPath).WithField("version", V).Debug("Получили последнюю версию коммита")
+
 		if version, err := strconv.Atoi(V); err != nil {
 			logrus.Error("Версия не является числом \"" + V + "\"")
 			return 1
@@ -355,6 +479,8 @@ func GetLastVersion(RepPath string) int {
 }
 
 func SeveLastVersion(RepPath string, Version int) {
+	logrus.WithField("Репозиторий", RepPath).WithField("Версия", Version).Debug("Обновляем последнюю версию коммита")
+
 	currentDir, _ := os.Getwd()
 	part := strings.Split(RepPath, "\\")
 	if len(part) == 1 { // значит путь с разделителем "/"

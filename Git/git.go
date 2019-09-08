@@ -59,7 +59,7 @@ func (g *Git) Destroy() {
 }
 
 func (g *Git) Сheckout(branch string) error {
-	logrus.WithField("Каталог", g.repDir).Debug("checkout")
+	logrus.WithField("Каталог", g.repDir).WithField("branch", branch).Debug("checkout")
 
 	cmd := exec.Command("git", "checkout", branch)
 	if err, _ := g.run(cmd, g.repDir); err != nil {
@@ -159,7 +159,8 @@ func (g *Git) optimization() (err error) {
 }
 
 func (g *Git) CommitAndPush(branch string) (err error) {
-	logrus.WithField("Каталог", g.repDir).Debug("CommitAndPush")
+	logrus.WithField("Каталог", g.repDir).Debug("begin CommitAndPush")
+	defer func() { logrus.WithField("Каталог", g.repDir).Debug("end CommitAndPush") }()
 
 	if _, err = os.Stat(g.repDir); os.IsNotExist(err) {
 		err = fmt.Errorf("Каталог %q Git репозитория не найден", g.repDir)
@@ -212,6 +213,5 @@ func (g *Git) run(cmd *exec.Cmd, dir string) (error, string) {
 		logrus.WithField("Исполняемый файл", cmd.Path).Error(errText)
 		return fmt.Errorf(errText), ""
 	}
-
-	return nil, cmd.Stdout.(*bytes.Buffer).String()
+	return err, cmd.Stdout.(*bytes.Buffer).String()
 }

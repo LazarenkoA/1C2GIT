@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <!-- Required meta tags -->
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+
+        <title>Inbox</title>
+    
+        <!-- Bootstrap CSS -->
+        <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0-beta/css/bootstrap.min.css" integrity="sha384-/Y6pD6FV/Vv2HJnA6t+vslU6fwYXjCFtcEpHbNJ0lyAFsXTsjBbfaDjzALeQsN6M" crossorigin="anonymous">
+        <style>
+            .row { border-top: 1px solid silver;}
+        </style>
+    </head>
+<body>
+<div class="container">
+    <div style="margin-bottom: 0px;">
+        <h1>1C2GIT</h1>
+        <p>Синхронизация хранилища 1С и Git</p>
+    </div>
+</div>
+
+<div class="container" id="messages">
+    {{range .}}
+    <div class="row">
+        <div class="col-sm" style="max-width: 5%">
+            {{if eq .type  1}}
+                <img src="/img/error.png" width="16px" hight="15px" />
+            {{else}}
+                <img src="/img/success.png" width="16px" hight="15px" />
+            {{end}}
+        </div>
+        <div class="col-sm">{{.msg}}</div>
+    </div>
+    {{end}}
+</div>
+
+<script>
+    function newMessage(msg) {
+        msgNode = '<div class="col-sm" style="max-width: 5%">';
+        if (msg.type == "1") {
+             msgNode += '<img src="/img/error.png" width="16px" hight="15px" />';
+        } else {
+            msgNode += '<img src="/img/success.png" width="16px" hight="15px" />';
+        }
+        msgNode +='</div>';
+        msgNode += '<div class="col-sm">'+msg.msg+'</div>';
+
+        var node = document.createElement("div");
+        node.className = "row";
+        node.innerHTML = msgNode;
+
+        rows = document.getElementsByClassName("row")
+        // выводим 10 элементов
+        for (var i = -(rows.length-1); i < -15; i--) {
+            console.log(i)
+            rows[-i].parentNode.removeChild(rows[-i]);
+        }
+
+        msgs = document.getElementById("messages")
+        msgs.insertBefore(node, msgs.childNodes[0]);
+    }
+    
+    conn = new WebSocket("ws://127.0.0.1:2020/notifications");
+    conn.onmessage = function (event) {
+        if(event.data != "") {
+            newMessage(JSON.parse(event.data));
+        }
+    };
+</script>
+</body>
+</html>
