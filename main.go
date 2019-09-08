@@ -126,13 +126,6 @@ func main() {
 	}
 
 	fmt.Printf("Запуск ОК. Уровень логирования - %d\n", LogLevel)
-	go func() {
-		timer := time.NewTicker(time.Second * 5)
-		for range timer.C {
-			writeInfo(fmt.Sprintf("%v", time.Now()), info)
-		}
-	}()
-
 	wg.Wait()
 }
 
