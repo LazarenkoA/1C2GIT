@@ -229,9 +229,12 @@ func start(wg *sync.WaitGroup, mu *sync.Mutex, r *RepositoryConf, rep *Configura
 		}
 		for _, _report := range report {
 			// анонимная функция исключительно из-за defer, аналог try - catch
+			// с гитом лучше не работать параллельно, там меняются переменные окружения, по этому коммитим последовательно
+			mu.Lock()
 			func() {
 				git := new(git.Git).New(r.GetOutDir(), _report, mapUser)
 				defer git.Destroy()
+				defer mu.Unlock()
 
 				if err = git.Сheckout(r.To.Branch); err != nil {
 					return // если ветку не смогли переключить, логируемся и выходим, инчаче мы не в ту ветку закоммитим
@@ -249,16 +252,10 @@ func start(wg *sync.WaitGroup, mu *sync.Mutex, r *RepositoryConf, rep *Configura
 						Error("Ошибка выгрузки файлов из хранилища")
 					return
 				} else {
-					// с гитом лучше не работать параллельно, там меняются переменные окружения, по этому коммитим последовательно
-					mu.Lock()
-					func() {
-						defer mu.Unlock()
-
-						r.restoreVersion() // восстанавливаем версию перед коммитом
-						if err := git.CommitAndPush(r.To.Branch); err != nil {
-							logrus.Errorf("Ошибка при выполнении push & commit: %v", err)
-						}
-					}()
+					r.restoreVersion() // восстанавливаем версию перед коммитом
+					if err := git.CommitAndPush(r.To.Branch); err != nil {
+						logrus.Errorf("Ошибка при выполнении push & commit: %v", err)
+					}
 
 					SeveLastVersion(r.GetRepPath(), _report.Version)
 					logrus.WithField("Время", time).Debug("Синхронизация выполнена")
@@ -296,7 +293,7 @@ func (this *RepositoryConf) saveVersion() {
 
 	ConfigurationFile := path.Join(this.To.RepDir, "Configuration.xml")
 	if _, err := os.Stat(ConfigurationFile); os.IsNotExist(err) {
-		logrus.WithField("Файл", ConfigurationFile).WithField("Репозиторий", this.GetRepPath()).Error("Конфигурационный файл не существует")
+		logrus.WithField("Файл", ConfigurationFile).WithField("Репозиторий", this.GetRepPath()).Error("Конфигурационный файл (Configuration.xml) не найден")
 		return
 	}
 
@@ -329,7 +326,7 @@ func (this *RepositoryConf) restoreVersion() {
 
 	ConfigurationFile := path.Join(this.To.RepDir, "Configuration.xml")
 	if _, err := os.Stat(ConfigurationFile); os.IsNotExist(err) {
-		logrus.WithField("Файл", ConfigurationFile).WithField("Репозиторий", this.GetRepPath()).Error("Конфигурационный файл не существует")
+		logrus.WithField("Файл", ConfigurationFile).WithField("Репозиторий", this.GetRepPath()).Error("Конфигурационный файл (Configuration.xml) не найден")
 		return
 	}
 
@@ -405,9 +402,12 @@ func inilogrus() *time.Ticker {
 }
 
 func DeleleEmptyFile(file *os.File) {
+	if file == nil {
+		return
+	}
 	// Если файл пустой, удаляем его. что бы не плодил кучу файлов
 	info, _ := file.Stat()
-	if info.Size() == 0 {
+	if info.Size() == 0 && !info.IsDir() {
 		file.Close()
 
 		if err := os.Remove(file.Name()); err != nil {
@@ -415,22 +415,26 @@ func DeleleEmptyFile(file *os.File) {
 		}
 	}
 
-	// Для каталога, если  пустой, то зачем он нам
-	if !info.IsDir() { // Защита от рекурсии
-		dirPath, _ := filepath.Split(file.Name())
-
-		// Если в текущем каталоге нет файлов, пробуем удалить его
-		files, err := ioutil.ReadDir(dirPath)
-		if err != nil {
-			logrus.WithError(err).WithField("Каталог", dirPath).Error("Ошибка получения списка файлов в каталоге")
-			return
-		}
-
-		if len(files) == 0 {
-			dir, _ := os.OpenFile(dirPath, os.O_RDONLY, os.ModeDir)
-			DeleleEmptyFile(dir)
-		}
+	var dirPath string
+	// Для каталога, если пустой, то зачем он нам
+	if !info.IsDir() {
+		dirPath, _ = filepath.Split(file.Name())
+	} else {
+		dirPath = file.Name()
+		file.Close()
 	}
+
+	// Если в текущем каталоге нет файлов, пробуем удалить его
+	files, err := ioutil.ReadDir(dirPath)
+	if err != nil {
+		logrus.WithError(err).WithField("Каталог", dirPath).Error("Ошибка получения списка файлов в каталоге")
+		return
+	}
+
+	if len(files) == 0 {
+		os.Remove(dirPath)
+	}
+
 }
 
 func GetHash(Str string) string {

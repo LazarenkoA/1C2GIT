@@ -16,13 +16,13 @@ func ReadSettings(Filepath string, data interface{}) {
 
 	file, err := ioutil.ReadFile(Filepath)
 	if err != nil {
-		logrus.WithField("файл", Filepath).WithField("Ошибка", err).Panic("Ошибка открытия файла")
+		logrus.WithField("файл", Filepath).WithError(err).Panic("Ошибка открытия файла")
 		return
 	}
 
 	err = json.Unmarshal(file, data)
 	if err != nil {
-		logrus.WithField("файл", Filepath).WithField("Ошибка", err).Panic("Ошибка чтения конфигурационного файла")
+		logrus.WithField("файл", Filepath).WithError(err).Panic("Ошибка чтения конфигурационного файла")
 		return
 	}
 }
