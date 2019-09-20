@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -16,6 +17,7 @@ type Git struct {
 	data   I1CCommit
 	author string
 	env    map[string]string
+	mu     *sync.Mutex
 	//gitBin string // если стоит git, то в системной переменной path будет путь к git
 }
 
@@ -26,9 +28,10 @@ type I1CCommit interface {
 }
 
 // New - конструктор
-func (g *Git) New(repDir string, data I1CCommit, mapUser map[string]string) *Git {
+func (g *Git) New(mu *sync.Mutex, repDir string, data I1CCommit, mapUser map[string]string) *Git {
 	g.repDir = repDir
 	g.data = data
+	g.mu = mu
 
 	if g.author = mapUser[g.data.GetAuthor()]; g.author == "" {
 		if g.author = mapUser["Default"]; g.author == "" {
@@ -58,15 +61,67 @@ func (g *Git) Destroy() {
 	}
 }
 
-func (g *Git) Сheckout(branch string) error {
-	logrus.WithField("Каталог", g.repDir).WithField("branch", branch).Debug("checkout")
+func (g *Git) Сheckout(branch, repDir string, notLock bool) error {
+	logrus.Debug("Сheckout")
+
+	// notLock нужен для того, что бы не заблокировать самого себя, например вызов такой
+	// CommitAndPush - Pull - Сheckout, в этом случаи не нужно лочить т.к. в CommitAndPush уже залочено
+	if !notLock {
+		g.mu.Lock()
+		defer g.mu.Unlock()
+	}
+
+	if cb, err := g.getCurrentBranch(); err != nil {
+		return err
+	} else if cb == branch {
+		// Если текущая ветка = ветки назначения, просто выходим
+		return nil
+	}
+
+	logrus.WithField("Каталог", repDir).WithField("branch", branch).Debug("checkout")
 
 	cmd := exec.Command("git", "checkout", branch)
-	if err, _ := g.run(cmd, g.repDir); err != nil {
+	if _, err := run(cmd, repDir); err != nil {
 		return err // Странно, но почему-то гит информацию о том что изменилась ветка пишет в Stderr
 	} else {
 		return nil
 	}
+}
+
+func (g *Git) getCurrentBranch() (result string, err error) {
+	var branches []string
+	if branches, err = g.getBranches(); err != nil {
+		return "", err
+	}
+	for _, b := range branches {
+		// только так получилось текущую ветку определить
+		if strings.Index(b, "*") > -1 {
+			return strings.Trim(b, " *"), nil
+		}
+	}
+
+	return "", fmt.Errorf("Не удалось определить текущую ветку.\nДоступные ветки %v", branches)
+}
+
+func (g *Git) getBranches() (result []string, err error) {
+	if _, err = os.Stat(g.repDir); os.IsNotExist(err) {
+		err = fmt.Errorf("каталог %q Git репозитория не найден", g.repDir)
+		logrus.WithField("Каталог", g.repDir).Error(err)
+	}
+	result = []string{}
+
+	cmd := exec.Command("git", "branch")
+	if res, err := run(cmd, g.repDir); err != nil {
+		return []string{}, err
+	} else {
+		for _, branch := range strings.Split(res, "\n") {
+			if branch == "" {
+				continue
+			}
+			result = append(result, strings.Trim(branch, " "))
+		}
+	}
+	return result, nil
 }
 
 func (g *Git) Pull(branch string) (err error) {
@@ -78,36 +133,14 @@ func (g *Git) Pull(branch string) (err error) {
 	}
 
 	if branch != "" {
-		g.Сheckout(branch)
+		g.Сheckout(branch, g.repDir, true)
 	}
 
 	cmd := exec.Command("git", "pull")
-	if err, _ := g.run(cmd, g.repDir); err != nil {
+	if _, err := run(cmd, g.repDir); err != nil {
 		return err
 	} else {
 		return nil
-	}
-}
-
-func (g *Git) GetBranches() (err error, result []string) {
-	if _, err = os.Stat(g.repDir); os.IsNotExist(err) {
-		err = fmt.Errorf("Каталог %q Git репозитория не найден", g.repDir)
-		logrus.WithField("Каталог", g.repDir).Error(err)
-	}
-
-	result = []string{}
-
-	cmd := exec.Command("git", "branch")
-	if err, res := g.run(cmd, g.repDir); err != nil {
-		return err, []string{}
-	} else {
-		for _, branch := range strings.Split(res, "\n") {
-			if branch == "" {
-				continue
-			}
-			result = append(result, strings.Trim(branch, " *"))
-		}
-		return nil, result
 	}
 }
 
@@ -119,7 +152,7 @@ func (g *Git) Push() (err error) {
 	}
 
 	cmd := exec.Command("git", "push")
-	if err, _ := g.run(cmd, g.repDir); err != nil {
+	if _, err := run(cmd, g.repDir); err != nil {
 		return err
 	} else {
 		return nil
@@ -135,7 +168,7 @@ func (g *Git) Add() (err error) {
 	}
 
 	cmd := exec.Command("git", "add", ".")
-	if err, _ := g.run(cmd, g.repDir); err != nil {
+	if _, err := run(cmd, g.repDir); err != nil {
 		return err
 	} else {
 		return nil
@@ -151,7 +184,7 @@ func (g *Git) optimization() (err error) {
 	}
 
 	cmd := exec.Command("git", "gc", "--auto")
-	if err, _ := g.run(cmd, g.repDir); err != nil {
+	if _, err := run(cmd, g.repDir); err != nil {
 		return err
 	} else {
 		return nil
@@ -159,6 +192,9 @@ func (g *Git) optimization() (err error) {
 }
 
 func (g *Git) CommitAndPush(branch string) (err error) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+
 	logrus.WithField("Каталог", g.repDir).Debug("begin CommitAndPush")
 	defer func() { logrus.WithField("Каталог", g.repDir).Debug("end CommitAndPush") }()
 
@@ -185,7 +221,7 @@ func (g *Git) CommitAndPush(branch string) (err error) {
 	param = append(param, strings.Replace(g.repDir, "\\", "/", -1))
 
 	cmdCommit := exec.Command("git", param...)
-	g.run(cmdCommit, g.repDir)
+	run(cmdCommit, g.repDir)
 
 	g.Push()
 	g.optimization()
@@ -193,7 +229,7 @@ func (g *Git) CommitAndPush(branch string) (err error) {
 	return nil
 }
 
-func (g *Git) run(cmd *exec.Cmd, dir string) (error, string) {
+func run(cmd *exec.Cmd, dir string) (string, error) {
 	logrus.WithField("Исполняемый файл", cmd.Path).
 		WithField("Параметры", cmd.Args).
 		WithField("Каталог", dir).
@@ -211,7 +247,7 @@ func (g *Git) run(cmd *exec.Cmd, dir string) (error, string) {
 			errText += fmt.Sprintf("StdErr:%v \n", stderr)
 		}
 		logrus.WithField("Исполняемый файл", cmd.Path).Error(errText)
-		return fmt.Errorf(errText), ""
+		return "", fmt.Errorf(errText)
 	}
-	return err, cmd.Stdout.(*bytes.Buffer).String()
+	return cmd.Stdout.(*bytes.Buffer).String(), err
 }

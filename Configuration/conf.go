@@ -213,7 +213,7 @@ func (this *Repository) DumpConfigToFiles(DataRep IRepository, fileDBPath string
 	}
 }
 
-func (this *Repository) GetReport(DataRep IRepository, DitOut string, version int) (error, []*RepositoryInfo) {
+func (this *Repository) GetReport(DataRep IRepository, version int) (error, []*RepositoryInfo) {
 	result := []*RepositoryInfo{}
 
 	report := this.saveReport(DataRep, version)

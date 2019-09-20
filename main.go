@@ -212,13 +212,19 @@ func start(wg *sync.WaitGroup, mu *sync.Mutex, r *RepositoryConf, rep *Configura
 	}
 
 	invoke := func(time time.Time) {
+		if _, err := os.Stat(r.To.RepDir); os.IsNotExist(err) {
+			logrus.Debugf("Создаем каталог %q", r.To.RepDir)
+			if err := os.Mkdir(r.To.RepDir, os.ModeDir); err != nil {
+				logrus.WithError(err).Errorf("Ошибка создания каталога %q", r.To.RepDir)
+			}
+		}
 		lastVersion := GetLastVersion(r.GetRepPath())
 
 		logrus.WithField("Хранилище 1С", r.GetRepPath()).
-			WithField("Начальная версия", lastVersion).
+			WithField("Начальная ревизия", lastVersion).
 			Debug("Старт выгрузки")
 
-		err, report := rep.GetReport(r, r.GetOutDir(), lastVersion+1)
+		err, report := rep.GetReport(r, lastVersion+1)
 		if err != nil {
 			logrus.WithField("Репозиторий", r.GetRepPath()).Errorf("Ошибка получения отчета по хранилищу %v", err)
 			return
@@ -229,14 +235,12 @@ func start(wg *sync.WaitGroup, mu *sync.Mutex, r *RepositoryConf, rep *Configura
 		}
 		for _, _report := range report {
 			// анонимная функция исключительно из-за defer, аналог try - catch
-			// с гитом лучше не работать параллельно, там меняются переменные окружения, по этому коммитим последовательно
-			mu.Lock()
+			git := new(git.Git).New(mu, r.GetOutDir(), _report, mapUser)
 			func() {
-				git := new(git.Git).New(r.GetOutDir(), _report, mapUser)
 				defer git.Destroy()
-				defer mu.Unlock()
 
-				if err = git.Сheckout(r.To.Branch); err != nil {
+				if err = git.Сheckout(r.To.Branch, r.GetOutDir(), false); err != nil {
+					logrus.WithError(err).Errorf("Произошла ошибка при переключении ветки на %v", r.To.Branch)
 					return // если ветку не смогли переключить, логируемся и выходим, инчаче мы не в ту ветку закоммитим
 				}
 
@@ -456,7 +460,7 @@ func GetLastVersion(RepPath string) int {
 
 	if _, err := os.Stat(filePath); os.IsNotExist(err) {
 		logrus.Debug("Файл " + filePath + " не найден")
-		return 1
+		return 0
 	}
 
 	if errRead, versionStr := ConfigurationRepository.ReadFile(filePath, nil); errRead == nil {
