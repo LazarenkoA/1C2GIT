@@ -48,9 +48,10 @@ type setting struct {
 	Bin1C          string            `json:"Bin1C"`
 	RepositoryConf []*RepositoryConf `json:"RepositoryConf"`
 }
+type msgtype byte
 
 const (
-	info byte = iota
+	info msgtype = iota
 	err
 
 	ListenPort string = "2020"
@@ -85,7 +86,7 @@ func (h *Hook) Levels() []logrus.Level {
 	return []logrus.Level{logrus.ErrorLevel, logrus.PanicLevel}
 }
 func (h *Hook) Fire(En *logrus.Entry) error {
-	writeInfo(En.Message, err)
+	writeInfo(En.Message, "", err)
 	return nil
 }
 
@@ -186,12 +187,13 @@ func httpInitialise() {
 	})
 }
 
-func writeInfo(str string, t byte) {
+func writeInfo(str, autor string, t msgtype) {
 	fmt.Println(str)
 
 	data := map[string]interface{}{
-		"msg":  str,
-		"type": t,
+		"msg":   str,
+		"type":  t,
+		"autor": autor,
 	}
 
 	// сохраняем 10 последних запесей
@@ -263,7 +265,7 @@ func start(wg *sync.WaitGroup, mu *sync.Mutex, r *RepositoryConf, rep *Configura
 
 					SeveLastVersion(r.GetRepPath(), _report.Version)
 					logrus.WithField("Время", time).Debug("Синхронизация выполнена")
-					writeInfo(fmt.Sprintf("Синхронизация %v выполнена. Время %v\n\r", r.GetRepPath(), time.Format("02.01.2006 (15:01)")), info)
+					writeInfo(fmt.Sprintf("Синхронизация %v выполнена. Время %v\n\r", r.GetRepPath(), time.Format("02.01.2006 (15:01)")), _report.Author, info)
 				}
 			}()
 

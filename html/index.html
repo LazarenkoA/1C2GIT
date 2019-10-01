@@ -32,6 +32,7 @@
             {{end}}
         </div>
         <div class="col-sm">{{.msg}}</div>
+        <div style=" font-size:0.7rem; text-align: right; color:#b1b3b1;">Автор: {{.autor}}</div>
     </div>
     {{end}}
 </div>
@@ -47,6 +48,7 @@
         msgNode +='</div>';
         msgNode += '<div class="col-sm">'+msg.msg+'</div>';
 
+        msgNode += '<div style=" font-size:0.7rem; text-align: right; color:#b1b3b1;">Автор: ' +msg.autor+ '</div>';
         var node = document.createElement("div");
         node.className = "row";
         node.innerHTML = msgNode;
