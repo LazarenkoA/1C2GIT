@@ -59,9 +59,8 @@
         node.innerHTML = msgNode;
 
         rows = document.getElementsByClassName("row")
-        // выводим 10 элементов
-        for (var i = -(rows.length-1); i < -15; i--) {
-            console.log(i)
+        // выводим 15 элементов
+        for (var i = -(rows.length-1); i <= -15; i++) {
             rows[-i].parentNode.removeChild(rows[-i]);
         }
 

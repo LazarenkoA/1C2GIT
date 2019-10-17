@@ -196,8 +196,8 @@ func writeInfo(str, autor string, t msgtype) {
 		"autor": autor,
 	}
 
-	// сохраняем 10 последних запесей
-	if len(logBufer) == 10 {
+	// сохраняем 15 последних запесей
+	if len(logBufer) == 15 {
 		logBufer = logBufer[1 : len(logBufer)-1] // Удаляем первый элемент
 	}
 	// нужно на первое место поставить элемент
@@ -213,7 +213,7 @@ func start(wg *sync.WaitGroup, mu *sync.Mutex, r *RepositoryConf, rep *Configura
 		return
 	}
 
-	invoke := func(time time.Time) {
+	invoke := func(t time.Time) {
 		if _, err := os.Stat(r.To.RepDir); os.IsNotExist(err) {
 			logrus.Debugf("Создаем каталог %q", r.To.RepDir)
 			if err := os.Mkdir(r.To.RepDir, os.ModeDir); err != nil {
@@ -221,7 +221,6 @@ func start(wg *sync.WaitGroup, mu *sync.Mutex, r *RepositoryConf, rep *Configura
 			}
 		}
 		lastVersion := GetLastVersion(r.GetRepPath())
-
 		logrus.WithField("Хранилище 1С", r.GetRepPath()).
 			WithField("Начальная ревизия", lastVersion).
 			Debug("Старт выгрузки")
@@ -264,8 +263,8 @@ func start(wg *sync.WaitGroup, mu *sync.Mutex, r *RepositoryConf, rep *Configura
 					}
 
 					SeveLastVersion(r.GetRepPath(), _report.Version)
-					logrus.WithField("Время", time).Debug("Синхронизация выполнена")
-					writeInfo(fmt.Sprintf("Синхронизация %v выполнена. Время %v\n\r", r.GetRepPath(), time.Format("02.01.2006 (15:01)")), _report.Author, info)
+					logrus.WithField("Время", t).Debug("Синхронизация выполнена")
+					writeInfo(fmt.Sprintf("Синхронизация %v выполнена. Время %v\n\r", r.GetRepPath(), t.Format("02.01.2006 (15:01)")), _report.Author, info)
 				}
 			}()
 
