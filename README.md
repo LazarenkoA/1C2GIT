@@ -97,4 +97,4 @@ conn = new WebSocket("ws://127.0.0.1:2020/notifications");
 `
 
 В web интерфейс выводятся как ошибки, та ки информация о том, что произошла очередная синхронизация
-![screenshot](https://i.imgur.com/4JtQnuS.png)
+![screenshot](https://i.imgur.com/0YKaDtq.png)
