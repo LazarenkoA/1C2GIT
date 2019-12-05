@@ -101,9 +101,8 @@ func main() {
 	defer DeleleEmptyFile(logrus.StandardLogger().Out.(*os.File))
 
 	logchan = make(chan map[string]interface{}, 10)
-
-	mu := new(sync.Mutex)
 	wg := new(sync.WaitGroup)
+	mu := new(sync.Mutex)
 
 	httpInitialise()
 
@@ -234,14 +233,22 @@ func start(wg *sync.WaitGroup, mu *sync.Mutex, r *RepositoryConf, rep *Configura
 			logrus.WithField("Репозиторий", r.GetRepPath()).Debug("Репозиторий пустой")
 			return
 		}
-		for _, _report := range report {
+
+		//mu2 := new(sync.Mutex)
+		for i, _report := range report {
+			logrus.WithField("report iteration", i+1).Debugf("Хранилище 1С %q", r.GetRepPath())
+
 			// анонимная функция исключительно из-за defer, аналог try - catch
-			git := new(git.Git).New(mu, r.GetOutDir(), _report, mapUser)
+			git := new(git.Git).New(r.GetOutDir(), _report, mapUser)
+
+			// все же Lock нужен, вот если бы у нас расширения были по разным каталогам, тогда можно было бы параллелить, а так не получится, будут коллизии на командах гита
+			mu.Lock()
 			func() {
 				defer git.Destroy()
+				mu.Unlock()
 
-				if err = git.Сheckout(r.To.Branch, r.GetOutDir(), false); err != nil {
-					logrus.WithError(err).Errorf("Произошла ошибка при переключении ветки на %v", r.To.Branch)
+				if err = git.ResetHard(r.To.Branch); err != nil {
+					logrus.WithError(err).Errorf("Произошла ошибка при выполнении Pull ветки на %v", r.To.Branch)
 					return // если ветку не смогли переключить, логируемся и выходим, инчаче мы не в ту ветку закоммитим
 				}
 

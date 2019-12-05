@@ -6,7 +6,6 @@ import (
 	"os"
 	"os/exec"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -17,7 +16,7 @@ type Git struct {
 	data   I1CCommit
 	author string
 	env    map[string]string
-	mu     *sync.Mutex
+	//mu     *sync.Mutex
 	//gitBin string // если стоит git, то в системной переменной path будет путь к git
 }
 
@@ -28,10 +27,10 @@ type I1CCommit interface {
 }
 
 // New - конструктор
-func (g *Git) New(mu *sync.Mutex, repDir string, data I1CCommit, mapUser map[string]string) *Git {
+func (g *Git) New(repDir string, data I1CCommit, mapUser map[string]string) *Git { // mu *sync.Mutex,
 	g.repDir = repDir
 	g.data = data
-	g.mu = mu
+	//g.mu = mu
 
 	if g.author = mapUser[g.data.GetAuthor()]; g.author == "" {
 		if g.author = mapUser["Default"]; g.author == "" {
@@ -56,20 +55,22 @@ func (g *Git) New(mu *sync.Mutex, repDir string, data I1CCommit, mapUser map[str
 }
 
 func (g *Git) Destroy() {
+	logrus.WithField("Каталог", g.repDir).Debug("command. Destroy")
+
 	for k, v := range g.env {
 		os.Setenv(k, v)
 	}
 }
 
 func (g *Git) Сheckout(branch, repDir string, notLock bool) error {
-	logrus.Debug("Сheckout")
+	logrus.WithField("Каталог", g.repDir).Debug("command. Сheckout")
 
 	// notLock нужен для того, что бы не заблокировать самого себя, например вызов такой
 	// CommitAndPush - Pull - Сheckout, в этом случаи не нужно лочить т.к. в CommitAndPush уже залочено
-	if !notLock {
-		g.mu.Lock()
-		defer g.mu.Unlock()
-	}
+	// if !notLock {
+	// 	g.mu.Lock()
+	// 	defer g.mu.Unlock()
+	// }
 
 	if cb, err := g.getCurrentBranch(); err != nil {
 		return err
@@ -104,6 +105,8 @@ func (g *Git) getCurrentBranch() (result string, err error) {
 }
 
 func (g *Git) getBranches() (result []string, err error) {
+	logrus.WithField("Каталог", g.repDir).Debug("command. getBranches")
+
 	if _, err = os.Stat(g.repDir); os.IsNotExist(err) {
 		err = fmt.Errorf("каталог %q Git репозитория не найден", g.repDir)
 		logrus.WithField("Каталог", g.repDir).Error(err)
@@ -125,7 +128,10 @@ func (g *Git) getBranches() (result []string, err error) {
 }
 
 func (g *Git) Pull(branch string) (err error) {
-	logrus.WithField("Каталог", g.repDir).Debug("Pull")
+	// g.mu.Lock()
+	// defer g.mu.Unlock()
+
+	logrus.WithField("Каталог", g.repDir).Debug("command. Pull")
 
 	if _, err = os.Stat(g.repDir); os.IsNotExist(err) {
 		err = fmt.Errorf("Каталог %q Git репозитория не найден", g.repDir)
@@ -145,7 +151,10 @@ func (g *Git) Pull(branch string) (err error) {
 }
 
 func (g *Git) Push() (err error) {
-	logrus.WithField("Каталог", g.repDir).Debug("Push")
+	// g.mu.Lock()
+	// defer g.mu.Unlock()
+	logrus.WithField("Каталог", g.repDir).Debug("command. Push")
+
 	if _, err = os.Stat(g.repDir); os.IsNotExist(err) {
 		err = fmt.Errorf("Каталог %q Git репозитория не найден", g.repDir)
 		logrus.WithField("Каталог", g.repDir).Error(err)
@@ -160,7 +169,10 @@ func (g *Git) Push() (err error) {
 }
 
 func (g *Git) Add() (err error) {
-	logrus.WithField("Каталог", g.repDir).Debug("Add")
+	// g.mu.Lock()
+	// defer g.mu.Unlock()
+
+	logrus.WithField("Каталог", g.repDir).Debug("command. Add")
 
 	if _, err = os.Stat(g.repDir); os.IsNotExist(err) {
 		err = fmt.Errorf("Каталог %q Git репозитория не найден", g.repDir)
@@ -175,8 +187,32 @@ func (g *Git) Add() (err error) {
 	}
 }
 
+func (g *Git) ResetHard(branch string) (err error) {
+	// g.mu.Lock()
+	// defer g.mu.Unlock()
+
+	logrus.WithField("Каталог", g.repDir).Debug("command. ResetHard")
+
+	if _, err = os.Stat(g.repDir); os.IsNotExist(err) {
+		err = fmt.Errorf("Каталог %q Git репозитория не найден", g.repDir)
+		logrus.WithField("Каталог", g.repDir).Error(err)
+	}
+
+	if branch != "" {
+		g.Сheckout(branch, g.repDir, true)
+	}
+
+	cmd := exec.Command("git", "reset", "--hard", "origin/"+branch)
+	if _, err := run(cmd, g.repDir); err != nil {
+		return err
+	} else {
+		return nil
+	}
+}
+
 func (g *Git) optimization() (err error) {
-	logrus.WithField("Каталог", g.repDir).Debug("optimization")
+
+	logrus.WithField("Каталог", g.repDir).Debug("command. optimization")
 
 	if _, err = os.Stat(g.repDir); os.IsNotExist(err) {
 		err = fmt.Errorf("Каталог %q Git репозитория не найден", g.repDir)
@@ -192,10 +228,12 @@ func (g *Git) optimization() (err error) {
 }
 
 func (g *Git) CommitAndPush(branch string) (err error) {
-	g.mu.Lock()
-	defer g.mu.Unlock()
+	// закоментировал, что бы не было дедлока т.е. в методах типа Add, Pull ... тоже лок накладывается
+	// g.mu.Lock()
+	// defer g.mu.Unlock()
 
-	logrus.WithField("Каталог", g.repDir).Debug("begin CommitAndPush")
+	logrus.WithField("Каталог", g.repDir).Debug("command. CommitAndPush")
+
 	defer func() { logrus.WithField("Каталог", g.repDir).Debug("end CommitAndPush") }()
 
 	if _, err = os.Stat(g.repDir); os.IsNotExist(err) {
@@ -205,6 +243,11 @@ func (g *Git) CommitAndPush(branch string) (err error) {
 
 	g.Add()
 	g.Pull(branch)
+
+	//  весь метот лочить не можем
+	// g.mu.Lock()
+	// func() {
+	// 	defer g.mu.Unlock()
 
 	date := g.data.GetDateTime().Format("2006.01.02 15:04:05")
 
@@ -222,6 +265,7 @@ func (g *Git) CommitAndPush(branch string) (err error) {
 
 	cmdCommit := exec.Command("git", param...)
 	run(cmdCommit, g.repDir)
+	// }()
 
 	g.Push()
 	g.optimization()
