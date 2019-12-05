@@ -237,15 +237,14 @@ func start(wg *sync.WaitGroup, mu *sync.Mutex, r *RepositoryConf, rep *Configura
 		//mu2 := new(sync.Mutex)
 		for i, _report := range report {
 			logrus.WithField("report iteration", i+1).Debugf("Хранилище 1С %q", r.GetRepPath())
+			// все же Lock нужен, вот если бы у нас расширения были по разным каталогам, тогда можно было бы параллелить, а так не получится, будут коллизии на командах гита
+			mu.Lock()
 
 			// анонимная функция исключительно из-за defer, аналог try - catch
 			git := new(git.Git).New(r.GetOutDir(), _report, mapUser)
-
-			// все же Lock нужен, вот если бы у нас расширения были по разным каталогам, тогда можно было бы параллелить, а так не получится, будут коллизии на командах гита
-			mu.Lock()
 			func() {
 				defer git.Destroy()
-				mu.Unlock()
+				defer mu.Unlock()
 
 				if err = git.ResetHard(r.To.Branch); err != nil {
 					logrus.WithError(err).Errorf("Произошла ошибка при выполнении Pull ветки на %v", r.To.Branch)
