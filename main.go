@@ -257,6 +257,7 @@ func start(wg *sync.WaitGroup, mu *sync.Mutex, r *RepositoryConf, rep *Configura
 				// Очищаем каталог перед выгрузкой, это нужно на случай если удаляется какой-то объект
 				os.RemoveAll(r.GetOutDir())
 
+				// Как вариант можно параллельно грузить версии в темп каталоги, потом только переносить и пушить
 				if err := rep.DownloadConfFiles(r, _report.Version); err != nil {
 					logrus.WithField("Выгружаемая версия", _report.Version).
 						WithField("Репозиторий", r.GetRepPath()).
