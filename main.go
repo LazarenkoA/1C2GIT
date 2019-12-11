@@ -174,7 +174,8 @@ func httpInitialise() {
 	http.HandleFunc("/notifications", func(w http.ResponseWriter, r *http.Request) {
 		ws, err := upgrader.Upgrade(w, r, nil)
 		if err != nil {
-			logrus.Panic(err)
+			logrus.WithError(err).Warning("Ошибка обновления веб сокета")
+			return
 		}
 
 		go sendNewMsgNotifications(ws)
