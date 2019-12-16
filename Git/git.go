@@ -51,6 +51,8 @@ func (g *Git) New(repDir string, data I1CCommit, mapUser map[string]string) *Git
 	os.Setenv("GIT_AUTHOR_EMAIL", strings.Trim(parts[1], " "))
 	os.Setenv("GIT_COMMITTER_EMAIL", strings.Trim(parts[1], " "))
 
+	logrus.WithField("Environ", os.Environ).Debug("Установка переменных окружения")
+
 	return g
 }
 
@@ -60,6 +62,8 @@ func (g *Git) Destroy() {
 	for k, v := range g.env {
 		os.Setenv(k, v)
 	}
+
+	logrus.WithField("Environ", os.Environ).Debug("Восстанавливаем переменные окружения")
 }
 
 func (g *Git) Сheckout(branch, repDir string, notLock bool) error {
