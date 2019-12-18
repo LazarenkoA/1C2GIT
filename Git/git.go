@@ -30,6 +30,7 @@ type I1CCommit interface {
 func (g *Git) New(repDir string, data I1CCommit, mapUser map[string]string) *Git { // mu *sync.Mutex,
 	g.repDir = repDir
 	g.data = data
+	logrus.WithField("Каталог", g.repDir).Debug("GIT. Create object")
 	//g.mu = mu
 
 	if g.author = mapUser[g.data.GetAuthor()]; g.author == "" {
@@ -37,6 +38,7 @@ func (g *Git) New(repDir string, data I1CCommit, mapUser map[string]string) *Git
 			logrus.Panic("В конфиге MapUsers.conf не определен Default пользователь")
 		}
 	}
+	logrus.WithField("Автор", g.author).Debug("GIT. Create object")
 
 	g.env = make(map[string]string) // что бы в Destroy вернуть то что было
 	g.env["GIT_AUTHOR_NAME"] = os.Getenv("GIT_AUTHOR_NAME")
@@ -51,7 +53,7 @@ func (g *Git) New(repDir string, data I1CCommit, mapUser map[string]string) *Git
 	os.Setenv("GIT_AUTHOR_EMAIL", strings.Trim(parts[1], " "))
 	os.Setenv("GIT_COMMITTER_EMAIL", strings.Trim(parts[1], " "))
 
-	logrus.WithField("Environ", os.Environ).Debug("Установка переменных окружения")
+	logrus.WithField("Environ", os.Environ).Debug("GIT. Create object")
 
 	return g
 }

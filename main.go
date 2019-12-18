@@ -291,7 +291,7 @@ func sendNewMsgNotifications(client *websocket.Conn) {
 	for Ldata := range logchan {
 		w, err := client.NextWriter(websocket.TextMessage)
 		if err != nil {
-			logrus.Errorf("Ошибка записи сокета: %v", err)
+			logrus.Warningf("Ошибка записи сокета: %v", err)
 			break
 		}
 
