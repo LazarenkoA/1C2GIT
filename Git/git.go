@@ -53,7 +53,7 @@ func (g *Git) New(repDir string, data I1CCommit, mapUser map[string]string) *Git
 	os.Setenv("GIT_AUTHOR_EMAIL", strings.Trim(parts[1], " "))
 	os.Setenv("GIT_COMMITTER_EMAIL", strings.Trim(parts[1], " "))
 
-	logrus.WithField("Environ", os.Environ).Debug("GIT. Create object")
+	logrus.WithField("Environ", os.Environ()).Debug("GIT. Create object")
 
 	return g
 }
@@ -65,7 +65,7 @@ func (g *Git) Destroy() {
 		os.Setenv(k, v)
 	}
 
-	logrus.WithField("Environ", os.Environ).Debug("Восстанавливаем переменные окружения")
+	logrus.WithField("Environ", os.Environ()).Debug("Восстанавливаем переменные окружения")
 }
 
 func (g *Git) Сheckout(branch, repDir string, notLock bool) error {
@@ -291,13 +291,16 @@ func run(cmd *exec.Cmd, dir string) (string, error) {
 
 	err := cmd.Run()
 	stderr := cmd.Stderr.(*bytes.Buffer).String()
+	stdout := cmd.Stdout.(*bytes.Buffer).String()
 	if err != nil {
 		errText := fmt.Sprintf("Произошла ошибка запуска:\n err:%v \n Параметры: %v", string(err.Error()), cmd.Args)
 		if stderr != "" {
 			errText += fmt.Sprintf("StdErr:%v \n", stderr)
 		}
-		logrus.WithField("Исполняемый файл", cmd.Path).Error(errText)
+		logrus.WithField("Исполняемый файл", cmd.Path).
+			WithField("Stdout", stdout).
+			Error(errText)
 		return "", fmt.Errorf(errText)
 	}
-	return cmd.Stdout.(*bytes.Buffer).String(), err
+	return stdout, err
 }

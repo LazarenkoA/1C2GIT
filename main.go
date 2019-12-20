@@ -244,8 +244,8 @@ func start(wg *sync.WaitGroup, mu *sync.Mutex, r *RepositoryConf, rep *Configura
 			// анонимная функция исключительно из-за defer, аналог try - catch
 			git := new(git.Git).New(r.GetOutDir(), _report, mapUser)
 			func() {
-				defer git.Destroy()
 				defer mu.Unlock()
+				defer git.Destroy()
 
 				if err = git.ResetHard(r.To.Branch); err != nil {
 					logrus.WithError(err).Errorf("Произошла ошибка при выполнении Pull ветки на %v", r.To.Branch)
