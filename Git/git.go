@@ -33,6 +33,9 @@ func (g *Git) New(repDir string, data I1CCommit, mapUser map[string]string) *Git
 	logrus.WithField("Каталог", g.repDir).Debug("GIT. Create object")
 	//g.mu = mu
 
+	logrus.WithField("Пользователь из хранилища", g.data.GetAuthor()).
+		WithField("mapUser", mapUser).
+		Debug("Получаем соответствие пользователей")
 	if g.author = mapUser[g.data.GetAuthor()]; g.author == "" {
 		if g.author = mapUser["Default"]; g.author == "" {
 			logrus.Panic("В конфиге MapUsers.conf не определен Default пользователь")
