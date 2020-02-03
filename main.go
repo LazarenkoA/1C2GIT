@@ -157,7 +157,7 @@ func httpInitialise() {
 	// эта горутина нужна что бы читать из канала до того пока не загрузится http страничка (notifications)
 	// потому как только тогда стартует чтение из канала, а если не читать из канала, у нас все выполнение застопорится
 	// Сделано так, что при выполнении обработчика страницы notifications через контекст останавливается горутина
-	ctx, cansel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(context.Background())
 	go func() {
 	exit:
 		for range logchan {
@@ -182,7 +182,7 @@ func httpInitialise() {
 
 		// что б не запускалось при каждой перезагрузки страницы
 		once.Do(func() {
-			cansel()
+			cancel()
 		})
 	})
 }
