@@ -3,7 +3,7 @@
 ===========
 #### Простая в настройки утилита для синхронизации хранилища 1С и GIT репозитория.
 
-[![Watch the video](doc/img/browser_KnoJenu9An.png)](https://www.youtube.com/watch?v=Dk2Vyh5PRcQ)
+[![Watch the video](doc/img/browser_KnoJenu9An.jpg)](https://www.youtube.com/watch?v=Dk2Vyh5PRcQ)
 
 Данное решение я постарался сделать максимально простым в настройки, по факту нужно два действия
 
