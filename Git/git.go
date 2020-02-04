@@ -200,7 +200,7 @@ func (g *Git) ResetHard(branch string) (err error) {
 	// g.mu.Lock()
 	// defer g.mu.Unlock()
 
-	logrus.WithField("Каталог", g.repDir).Debug("GIT. ResetHard")
+	logrus.WithField("branch", branch).WithField("Каталог", g.repDir).Debug("GIT. ResetHard")
 
 	if _, err = os.Stat(g.repDir); os.IsNotExist(err) {
 		err = fmt.Errorf("Каталог %q Git репозитория не найден", g.repDir)
@@ -210,8 +210,12 @@ func (g *Git) ResetHard(branch string) (err error) {
 	if branch != "" {
 		g.Сheckout(branch, g.repDir, true)
 	}
+	logrus.WithField("branch", branch).WithField("Каталог", g.repDir).Debug("GIT. fetch")
 
-	cmd := exec.Command("git", "reset", "--hard", "origin/"+branch)
+	cmd := exec.Command("git", "fetch", "origin")
+	run(cmd, g.repDir)
+
+	cmd = exec.Command("git", "reset", "--hard", "origin/"+branch)
 	if _, err := run(cmd, g.repDir); err != nil {
 		return err
 	} else {
