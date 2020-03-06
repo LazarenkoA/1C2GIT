@@ -268,6 +268,7 @@ func start(wg *sync.WaitGroup, mu *sync.Mutex, r *RepositoryConf, rep *Configura
 					r.restoreVersion() // восстанавливаем версию перед коммитом
 					if err := git.CommitAndPush(r.To.Branch); err != nil {
 						logrus.Errorf("Ошибка при выполнении push & commit: %v", err)
+						return
 					}
 
 					SeveLastVersion(r.GetRepPath(), _report.Version)
