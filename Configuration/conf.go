@@ -47,7 +47,7 @@ func (r *RepositoryInfo) GetComment() string {
 }
 
 func (r *RepositoryInfo) GetAuthor() string {
-	return r.Author
+	return strings.Trim(r.Author, " ")
 }
 
 func (r *RepositoryInfo) GetDateTime() *time.Time {
