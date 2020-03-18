@@ -25,6 +25,7 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/sirupsen/logrus"
 	xmlpath "gopkg.in/xmlpath.v2"
+	"github.com/LazarenkoA/LogrusRotate"
 )
 
 var mapUser map[string]string
@@ -43,7 +44,8 @@ type RepositoryConf struct {
 	} `json:"To"`
 	version string // для хранения версии конфигурации
 }
-
+type RotateConf struct {
+}
 type setting struct {
 	Bin1C          string            `json:"Bin1C"`
 	RepositoryConf []*RepositoryConf `json:"RepositoryConf"`
@@ -97,8 +99,11 @@ var (
 )
 
 func main() {
-	defer inilogrus().Stop()
-	defer DeleleEmptyFile(logrus.StandardLogger().Out.(*os.File))
+	flag.IntVar(&LogLevel, "LogLevel", 3, "Уровень логирования от 2 до 5, где 2 - ошибка, 3 - предупреждение, 4 - информация, 5 - дебаг")
+	flag.Parse()
+
+	lw := new(logrusRotate.Rotate).Construct()
+	defer lw.Start(LogLevel, new(RotateConf))()
 
 	logchan = make(chan map[string]interface{}, 10)
 	wg := new(sync.WaitGroup)
@@ -379,78 +384,6 @@ func (this *RepositoryConf) restoreVersion() {
 	}
 }
 
-func inilogrus() *time.Ticker {
-	flag.IntVar(&LogLevel, "LogLevel", 3, "Уровень логирования от 2 до 5, где 2 - ошибка, 3 - предупреждение, 4 - информация, 5 - дебаг")
-
-	flag.Parse()
-	currentDir, _ := os.Getwd()
-
-	createNewDir := func() string {
-		dir := filepath.Join(currentDir, "Logs", time.Now().Format("02.01.2006"))
-		if _, err := os.Stat(dir); os.IsNotExist(err) {
-			os.MkdirAll(dir, os.ModePerm)
-		}
-		return dir
-	}
-
-	Log1, _ := os.OpenFile(filepath.Join(createNewDir(), "Log_"+time.Now().Format("15.04.05")), os.O_CREATE, os.ModeAppend)
-	logrus.SetOutput(Log1)
-
-	timer := time.NewTicker(time.Minute * 10)
-	go func() {
-		for range timer.C {
-			Log, _ := os.OpenFile(filepath.Join(createNewDir(), "Log_"+time.Now().Format("15.04.05")), os.O_CREATE, os.ModeAppend)
-			oldFile := logrus.StandardLogger().Out.(*os.File)
-			logrus.SetOutput(Log)
-			DeleleEmptyFile(oldFile)
-		}
-	}()
-
-	logrus.SetLevel(logrus.Level(LogLevel))
-	logrus.AddHook(new(Hook))
-
-	//line, _ := bufio.NewReader(os.Stdin).ReadString('\n')
-	//fmt.Println(line)
-
-	return timer
-}
-
-func DeleleEmptyFile(file *os.File) {
-	if file == nil {
-		return
-	}
-	// Если файл пустой, удаляем его. что бы не плодил кучу файлов
-	info, _ := file.Stat()
-	if info.Size() == 0 && !info.IsDir() {
-		file.Close()
-
-		if err := os.Remove(file.Name()); err != nil {
-			logrus.WithError(err).WithField("Файл", file.Name()).Error("Ошибка удаления файла")
-		}
-	}
-
-	var dirPath string
-	// Для каталога, если пустой, то зачем он нам
-	if !info.IsDir() {
-		dirPath, _ = filepath.Split(file.Name())
-	} else {
-		dirPath = file.Name()
-		file.Close()
-	}
-
-	// Если в текущем каталоге нет файлов, пробуем удалить его
-	files, err := ioutil.ReadDir(dirPath)
-	if err != nil {
-		logrus.WithError(err).WithField("Каталог", dirPath).Error("Ошибка получения списка файлов в каталоге")
-		return
-	}
-
-	if len(files) == 0 {
-		os.Remove(dirPath)
-	}
-
-}
-
 func GetHash(Str string) string {
 	first := sha1.New()
 	first.Write([]byte(Str))
@@ -503,4 +436,22 @@ func SeveLastVersion(RepPath string, Version int) {
 	if err != nil {
 		logrus.WithField("файл", filePath).WithField("Ошибка", err).Error("Ошибка записи файла")
 	}
+}
+
+///////////////// RotateConf ////////////////////////////////////////////////////
+func (w *RotateConf) LogDir() string {
+	currentDir, _ := os.Getwd()
+	return filepath.Join(currentDir, "Logs")
+}
+func (w *RotateConf) FormatDir() string {
+	return "02.01.2006"
+}
+func (w *RotateConf) FormatFile() string {
+	return "15"
+}
+func (w *RotateConf) TTLLogs() int {
+	return 12
+}
+func (w *RotateConf) TimeRotate() int {
+	return 1
 }
