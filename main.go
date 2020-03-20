@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	logrusRotate "github.com/LazarenkoA/LogrusRotate"
 	"html/template"
 	"io/ioutil"
 	"net/http"
@@ -25,7 +26,6 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/sirupsen/logrus"
 	xmlpath "gopkg.in/xmlpath.v2"
-	"github.com/LazarenkoA/LogrusRotate"
 )
 
 var mapUser map[string]string
@@ -101,6 +101,8 @@ var (
 func main() {
 	flag.IntVar(&LogLevel, "LogLevel", 3, "Уровень логирования от 2 до 5, где 2 - ошибка, 3 - предупреждение, 4 - информация, 5 - дебаг")
 	flag.Parse()
+	logrus.SetLevel(logrus.Level(2))
+	logrus.AddHook(new(Hook))
 
 	lw := new(logrusRotate.Rotate).Construct()
 	defer lw.Start(LogLevel, new(RotateConf))()

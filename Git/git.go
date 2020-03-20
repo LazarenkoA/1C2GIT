@@ -254,8 +254,11 @@ func (g *Git) CommitAndPush(branch string) (err error) {
 		logrus.WithField("Каталог", g.repDir).Error(err)
 	}
 
-	g.Add()
-	g.Pull(branch)
+	err = g.Add()
+	err = g.Pull(branch)
+	if err != nil {
+		return
+	}
 
 	//  весь метот лочить не можем
 	// g.mu.Lock()
@@ -277,11 +280,13 @@ func (g *Git) CommitAndPush(branch string) (err error) {
 	param = append(param, strings.Replace(g.repDir, "\\", "/", -1))
 
 	cmdCommit := exec.Command("git", param...)
-	run(cmdCommit, g.repDir)
+	if _, err = run(cmdCommit, g.repDir); err != nil {
+		return err
+	}
 	// }()
 
-	g.Push()
-	g.optimization()
+	err = g.Push()
+	err = g.optimization()
 
 	return nil
 }
