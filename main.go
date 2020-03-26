@@ -436,7 +436,7 @@ func SeveLastVersion(RepPath string, Version int) {
 	}
 	filePath := filepath.Join(currentDir, part[len(part)-1])
 
-	err := ioutil.WriteFile(filePath, []byte(fmt.Sprint(Version)), os.ModeExclusive)
+	err := ioutil.WriteFile(filePath, []byte(fmt.Sprint(Version)), os.ModeAppend|os.ModePerm)
 	if err != nil {
 		logrus.WithField("файл", filePath).WithField("Ошибка", err).Error("Ошибка записи файла")
 	}
