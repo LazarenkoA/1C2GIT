@@ -304,7 +304,10 @@ func run(cmd *exec.Cmd, dir string) (string, error) {
 	err := cmd.Run()
 	stderr := cmd.Stderr.(*bytes.Buffer).String()
 	stdout := cmd.Stdout.(*bytes.Buffer).String()
-	if err != nil {
+
+	// Гит странный, вроде информационное сообщение как "nothing to commit, working tree clean" присылает в Stderr и статус выполнения 1, ну еба...
+	// приходится костылить
+	if err != nil && !strings.Contains(stdout, "nothing to commit")  {
 		errText := fmt.Sprintf("Произошла ошибка запуска:\n err:%v \n Параметры: %v", string(err.Error()), cmd.Args)
 		if stderr != "" {
 			errText += fmt.Sprintf("StdErr:%v \n", stderr)
@@ -312,7 +315,8 @@ func run(cmd *exec.Cmd, dir string) (string, error) {
 		logrus.WithField("Исполняемый файл", cmd.Path).
 			WithField("Stdout", stdout).
 			Error(errText)
-		return "", fmt.Errorf(errText)
+		return stdout, fmt.Errorf(errText)
+	} else {
+		return stdout, nil
 	}
-	return stdout, err
 }

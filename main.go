@@ -88,7 +88,7 @@ func (h *Hook) Levels() []logrus.Level {
 	return []logrus.Level{logrus.ErrorLevel, logrus.PanicLevel}
 }
 func (h *Hook) Fire(En *logrus.Entry) error {
-	writeInfo(En.Message, "", err)
+	writeInfo(En.Message, "", "", "", err)
 	return nil
 }
 
@@ -194,11 +194,13 @@ func httpInitialise() {
 	})
 }
 
-func writeInfo(str, autor string, t msgtype) {
+func writeInfo(str, autor, datetime, comment string, t msgtype) {
 	fmt.Println(str)
 
 	data := map[string]interface{}{
 		"msg":   str,
+		"datetime":   datetime,
+		"comment":   comment,
 		"type":  t,
 		"autor": autor,
 	}
@@ -280,7 +282,7 @@ func start(wg *sync.WaitGroup, mu *sync.Mutex, r *RepositoryConf, rep *Configura
 
 					SeveLastVersion(r.GetRepPath(), _report.Version)
 					logrus.WithField("Время", t).Debug("Синхронизация выполнена")
-					writeInfo(fmt.Sprintf("Синхронизация %v выполнена. Время %v\n\r", r.GetRepPath(), t.Format("02.01.2006 (15:04)")), _report.Author, info)
+					writeInfo(fmt.Sprintf("Синхронизация %v выполнена. Версия хранилища %v", r.GetRepPath(), _report.Version), _report.Author, t.Format("02.01.2006 (15:04)"), _report.Comment, info)
 				}
 			}()
 

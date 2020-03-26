@@ -31,10 +31,20 @@
                 <img src="/img/success.png" width="16px" hight="15px" />
             {{end}}
         </div>
-        <div class="col-sm">{{.msg}}</div>
-        {{if ne .autor  ""}}
-            <div style=" font-size:0.7rem; text-align: right; color:#b1b3b1;">Автор: {{.autor}}</div>
+        <div class="col-sm">{{.msg}}
+            {{if ne .type  1}}
+                <div style="font-size: .8rem;text-align: left;color:#b1b3b1;">{{.comment}}</div>
+            {{end}}
+        </div>
+
+        <!-- Если ошибка автора не будет -->
+        {{if ne .type  1}}
+            <div>
+                <div style=" font-size:0.7rem; text-align: right; color:#b1b3b1;">Автор: {{.autor}}</div>
+                <div style=" font-size:0.7rem; text-align: right; color:#b1b3b1;">{{.datetime}}</div>
+            </div>
         {{end}}
+
     </div>
     {{end}}
 </div>
@@ -48,12 +58,19 @@
             msgNode += '<img src="/img/success.png" width="16px" hight="15px" />';
         }
         msgNode +='</div>';
-        msgNode += '<div class="col-sm">'+msg.msg+'</div>';
-
-        if (msg.autor != "") {
-            msgNode += '<div style=" font-size:0.7rem; text-align: right; color:#b1b3b1;">Автор: ' +msg.autor+ '</div>';
+        msgNode += '<div class="col-sm">'+msg.msg;
+        if (msg.type != "1") {
+            msgNode += '<div style="font-size: .8rem;text-align: left;color:#b1b3b1;">' +msg.comment + '</div>'
         }
-        
+        msgNode += '</div>';
+
+        if (msg.type != "1") {
+            msgNode += '<div style=" font-size:0.7rem; text-align: right; color:#b1b3b1;">Автор: ' +msg.autor+ '</div>';
+            msgNode += '<div style=" font-size:0.7rem; text-align: right; color:#b1b3b1;">' +msg.datetime+ '</div>';
+        }
+
+
+
         var node = document.createElement("div");
         node.className = "row";
         node.innerHTML = msgNode;
