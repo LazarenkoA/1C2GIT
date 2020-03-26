@@ -282,7 +282,7 @@ func start(wg *sync.WaitGroup, mu *sync.Mutex, r *RepositoryConf, rep *Configura
 
 					SeveLastVersion(r.GetRepPath(), _report.Version)
 					logrus.WithField("Время", t).Debug("Синхронизация выполнена")
-					writeInfo(fmt.Sprintf("Синхронизация %v выполнена. Версия хранилища %v", r.GetRepPath(), _report.Version), _report.Author, t.Format("02.01.2006 (15:04)"), _report.Comment, info)
+					writeInfo(fmt.Sprintf("Синхронизация %v выполнена", r.GetRepPath()), _report.Author, t.Format("02.01.2006 (15:04)"), _report.Comment, info)
 				}
 			}()
 
