@@ -11,6 +11,7 @@ import (
 	"flag"
 	"fmt"
 	logrusRotate "github.com/LazarenkoA/LogrusRotate"
+	"gopkg.in/yaml.v2"
 	"html/template"
 	"io/ioutil"
 	"net/http"
@@ -18,8 +19,6 @@ import (
 	"path"
 	"path/filepath"
 	"regexp"
-	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -29,7 +28,6 @@ import (
 )
 
 var mapUser map[string]string
-
 type RepositoryConf struct {
 	TimerMinute int `json:"TimerMinute"`
 	From        *struct {
@@ -223,18 +221,22 @@ func start(wg *sync.WaitGroup, mu *sync.Mutex, r *RepositoryConf, rep *Configura
 	}
 
 	invoke := func(t time.Time) {
+		vInfo := make(map[string]int, 0)
+
 		if _, err := os.Stat(r.To.RepDir); os.IsNotExist(err) {
 			logrus.Debugf("Создаем каталог %q", r.To.RepDir)
 			if err := os.Mkdir(r.To.RepDir, os.ModeDir); err != nil {
 				logrus.WithError(err).Errorf("Ошибка создания каталога %q", r.To.RepDir)
 			}
 		}
-		lastVersion := GetLastVersion(r.GetRepPath())
+		GetLastVersion(vInfo)
+
+
 		logrus.WithField("Хранилище 1С", r.GetRepPath()).
-			WithField("Начальная ревизия", lastVersion).
+			WithField("Начальная ревизия", vInfo[r.GetRepPath()]).
 			Debug("Старт выгрузки")
 
-		err, report := rep.GetReport(r, lastVersion+1)
+		err, report := rep.GetReport(r, vInfo[r.GetRepPath()]+1)
 		if err != nil {
 			logrus.WithField("Репозиторий", r.GetRepPath()).Errorf("Ошибка получения отчета по хранилищу %v", err)
 			return
@@ -280,7 +282,8 @@ func start(wg *sync.WaitGroup, mu *sync.Mutex, r *RepositoryConf, rep *Configura
 						return
 					}
 
-					SeveLastVersion(r.GetRepPath(), _report.Version)
+					vInfo[r.GetRepPath()] = _report.Version
+					SeveLastVersion(vInfo)
 					logrus.WithField("Время", t).Debug("Синхронизация выполнена")
 					writeInfo(fmt.Sprintf("Синхронизация %v выполнена", r.GetRepPath()), _report.Author, t.Format("02.01.2006 (15:04)"), _report.Comment, info)
 				}
@@ -395,49 +398,42 @@ func GetHash(Str string) string {
 	return fmt.Sprintf("%x", first.Sum(nil))
 }
 
-func GetLastVersion(RepPath string) int {
-	logrus.WithField("Репозиторий", RepPath).Debug("Получаем последнюю версию коммита")
+func GetLastVersion(v map[string]int) {
+	logrus.Debug("Получаем последнюю версию коммита")
 
 	currentDir, _ := os.Getwd()
-	part := strings.Split(RepPath, "\\")
-	if len(part) == 1 { // значит путь с разделителем "/"
-		part = strings.Split(RepPath, "/")
-	}
-	filePath := filepath.Join(currentDir, part[len(part)-1])
-
+	filePath := filepath.Join(currentDir, "versions")
 	if _, err := os.Stat(filePath); os.IsNotExist(err) {
-		logrus.Debug("Файл " + filePath + " не найден")
-		return 0
+		logrus.WithField("файл", filePath).Warning("Файл версий не найден")
+		return
 	}
 
-	if errRead, versionStr := ConfigurationRepository.ReadFile(filePath, nil); errRead == nil {
-		V := string(*versionStr)
-		logrus.WithField("Репозиторий", RepPath).WithField("version", V).Debug("Получили последнюю версию коммита")
+	file, err := ioutil.ReadFile(filePath)
+	if err != nil {
+		logrus.WithField("файл", filePath).WithError(err).Warning("Ошибка открытия файла")
+		return
+	}
 
-		if version, err := strconv.Atoi(V); err != nil {
-			logrus.Error("Версия не является числом \"" + V + "\"")
-			return 1
-		} else {
-			return version
-		}
-	} else {
-		logrus.WithField("Файл", filePath).Errorf("Ошибка чтения файла: \n %v", errRead)
-		return 1
+	err = yaml.Unmarshal(file, v)
+	if err != nil {
+		logrus.WithField("файл", filePath).WithError(err).Warning("Ошибка чтения конфигурационного файла")
+		return
 	}
 }
 
-func SeveLastVersion(RepPath string, Version int) {
-	logrus.WithField("Репозиторий", RepPath).WithField("Версия", Version).Debug("Обновляем последнюю версию коммита")
+func SeveLastVersion(v map[string]int) {
+	logrus.WithField("Данные версий", v).Debug("Обновляем последнюю версию коммита")
 
 	currentDir, _ := os.Getwd()
-	part := strings.Split(RepPath, "\\")
-	if len(part) == 1 { // значит путь с разделителем "/"
-		part = strings.Split(RepPath, "/")
-	}
-	filePath := filepath.Join(currentDir, part[len(part)-1])
+	filePath := filepath.Join(currentDir, "versions")
 
-	err := ioutil.WriteFile(filePath, []byte(fmt.Sprint(Version)), os.ModeAppend|os.ModePerm)
+
+	b, err := yaml.Marshal(v)
 	if err != nil {
+		logrus.WithField("файл", filePath).WithError(err).Warning("Ошибка сериализации")
+		return
+	}
+	if err = ioutil.WriteFile(filePath, b, os.ModeAppend|os.ModePerm); err != nil {
 		logrus.WithField("файл", filePath).WithField("Ошибка", err).Error("Ошибка записи файла")
 	}
 }
