@@ -14,6 +14,8 @@ import (
 	"gopkg.in/yaml.v2"
 	"html/template"
 	"io/ioutil"
+	"log"
+	"math"
 	"net/http"
 	"os"
 	"path"
@@ -92,11 +94,11 @@ func (h *Hook) Fire(En *logrus.Entry) error {
 
 var (
 	LogLevel int
-	logBufer []map[string]interface{}
-	logchan  chan map[string]interface{}
+	logBufer = []map[string]interface{}{}
+	logchan chan map[string]interface{}
 )
 
-func main() {
+func main() 
 	flag.IntVar(&LogLevel, "LogLevel", 3, "Уровень логирования от 2 до 5, где 2 - ошибка, 3 - предупреждение, 4 - информация, 5 - дебаг")
 	flag.Parse()
 	logrus.SetLevel(logrus.Level(2))
@@ -193,7 +195,7 @@ func httpInitialise() {
 }
 
 func writeInfo(str, autor, datetime, comment string, t msgtype) {
-	fmt.Println(str)
+	log.Println(str)
 
 	data := map[string]interface{}{
 		"msg":   str,
@@ -203,12 +205,14 @@ func writeInfo(str, autor, datetime, comment string, t msgtype) {
 		"autor": autor,
 	}
 
-	// сохраняем 15 последних запесей
-	if len(logBufer) == 15 {
-		logBufer = logBufer[1 : len(logBufer)-1] // Удаляем первый элемент
+	// нужно на первое место поставить элемент, массив ограничиваем 15ю записями
+	if len(logBufer) > 0 {
+		logBufer = append(logBufer[:0], append([]map[string]interface{}{data}, logBufer[0:]...)...)
+		logBufer = logBufer[:int(math.Min(float64(len(logBufer)), 15))]
+	} else {
+		logBufer = append(logBufer, data)
 	}
-	// нужно на первое место поставить элемент
-	logBufer = append([]map[string]interface{}{data}, logBufer...)
+
 	logchan <- data
 }
 
