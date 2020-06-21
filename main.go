@@ -98,7 +98,7 @@ var (
 	logchan chan map[string]interface{}
 )
 
-func main() 
+func main() {
 	flag.IntVar(&LogLevel, "LogLevel", 3, "Уровень логирования от 2 до 5, где 2 - ошибка, 3 - предупреждение, 4 - информация, 5 - дебаг")
 	flag.Parse()
 	logrus.SetLevel(logrus.Level(2))
