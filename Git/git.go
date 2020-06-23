@@ -3,12 +3,11 @@ package git
 import (
 	"bytes"
 	"fmt"
+	logrusRotate "github.com/LazarenkoA/LogrusRotate"
 	"os"
 	"os/exec"
 	"strings"
 	"time"
-
-	"github.com/sirupsen/logrus"
 )
 
 type Git struct {
@@ -30,18 +29,18 @@ type I1CCommit interface {
 func (g *Git) New(repDir string, data I1CCommit, mapUser map[string]string) *Git { // mu *sync.Mutex,
 	g.repDir = repDir
 	g.data = data
-	logrus.WithField("Каталог", g.repDir).Debug("GIT. Create object")
+	logrusRotate.StandardLogger().WithField("Каталог", g.repDir).Debug("GIT. Create object")
 	//g.mu = mu
 
-	logrus.WithField("Пользователь из хранилища", g.data.GetAuthor()).
+	logrusRotate.StandardLogger().WithField("Пользователь из хранилища", g.data.GetAuthor()).
 		WithField("mapUser", mapUser).
 		Debug("Получаем соответствие пользователей")
 	if g.author = mapUser[g.data.GetAuthor()]; g.author == "" {
 		if g.author = mapUser["Default"]; g.author == "" {
-			logrus.Panic("В конфиге MapUsers.conf не определен Default пользователь")
+			logrusRotate.StandardLogger().Panic("В конфиге MapUsers.conf не определен Default пользователь")
 		}
 	}
-	logrus.WithField("Автор", g.author).Debug("GIT. Create object")
+	logrusRotate.StandardLogger().WithField("Автор", g.author).Debug("GIT. Create object")
 
 	g.env = make(map[string]string) // что бы в Destroy вернуть то что было
 	g.env["GIT_AUTHOR_NAME"] = os.Getenv("GIT_AUTHOR_NAME")
@@ -56,23 +55,23 @@ func (g *Git) New(repDir string, data I1CCommit, mapUser map[string]string) *Git
 	os.Setenv("GIT_AUTHOR_EMAIL", strings.Trim(parts[1], " "))
 	os.Setenv("GIT_COMMITTER_EMAIL", strings.Trim(parts[1], " "))
 
-	logrus.WithField("Environ", os.Environ()).Debug("GIT. Create object")
+	logrusRotate.StandardLogger().WithField("Environ", os.Environ()).Debug("GIT. Create object")
 
 	return g
 }
 
 func (g *Git) Destroy() {
-	logrus.WithField("Каталог", g.repDir).Debug("GIT. Destroy")
+	logrusRotate.StandardLogger().WithField("Каталог", g.repDir).Debug("GIT. Destroy")
 
 	for k, v := range g.env {
 		os.Setenv(k, v)
 	}
 
-	logrus.WithField("Environ", os.Environ()).Debug("Восстанавливаем переменные окружения")
+	logrusRotate.StandardLogger().WithField("Environ", os.Environ()).Debug("Восстанавливаем переменные окружения")
 }
 
 func (g *Git) Сheckout(branch, repDir string, notLock bool) error {
-	logrus.WithField("Каталог", g.repDir).Debug("GIT. Сheckout")
+	logrusRotate.StandardLogger().WithField("Каталог", g.repDir).Debug("GIT. Сheckout")
 
 	// notLock нужен для того, что бы не заблокировать самого себя, например вызов такой
 	// CommitAndPush - Pull - Сheckout, в этом случаи не нужно лочить т.к. в CommitAndPush уже залочено
@@ -88,7 +87,7 @@ func (g *Git) Сheckout(branch, repDir string, notLock bool) error {
 		return nil
 	}
 
-	logrus.WithField("Каталог", repDir).WithField("branch", branch).Debug("checkout")
+	logrusRotate.StandardLogger().WithField("Каталог", repDir).WithField("branch", branch).Debug("checkout")
 
 	cmd := exec.Command("git", "checkout", branch)
 	if _, err := run(cmd, repDir); err != nil {
@@ -114,11 +113,11 @@ func (g *Git) getCurrentBranch() (result string, err error) {
 }
 
 func (g *Git) getBranches() (result []string, err error) {
-	logrus.WithField("Каталог", g.repDir).Debug("GIT. getBranches")
+	logrusRotate.StandardLogger().WithField("Каталог", g.repDir).Debug("GIT. getBranches")
 
 	if _, err = os.Stat(g.repDir); os.IsNotExist(err) {
 		err = fmt.Errorf("каталог %q Git репозитория не найден", g.repDir)
-		logrus.WithField("Каталог", g.repDir).Error(err)
+		logrusRotate.StandardLogger().WithField("Каталог", g.repDir).Error(err)
 	}
 	result = []string{}
 
@@ -140,11 +139,11 @@ func (g *Git) Pull(branch string) (err error) {
 	// g.mu.Lock()
 	// defer g.mu.Unlock()
 
-	logrus.WithField("Каталог", g.repDir).Debug("GIT. Pull")
+	logrusRotate.StandardLogger().WithField("Каталог", g.repDir).Debug("GIT. Pull")
 
 	if _, err = os.Stat(g.repDir); os.IsNotExist(err) {
 		err = fmt.Errorf("Каталог %q Git репозитория не найден", g.repDir)
-		logrus.WithField("Каталог", g.repDir).Error(err)
+		logrusRotate.StandardLogger().WithField("Каталог", g.repDir).Error(err)
 	}
 
 	if branch != "" {
@@ -162,11 +161,11 @@ func (g *Git) Pull(branch string) (err error) {
 func (g *Git) Push() (err error) {
 	// g.mu.Lock()
 	// defer g.mu.Unlock()
-	logrus.WithField("Каталог", g.repDir).Debug("GIT. Push")
+	logrusRotate.StandardLogger().WithField("Каталог", g.repDir).Debug("GIT. Push")
 
 	if _, err = os.Stat(g.repDir); os.IsNotExist(err) {
 		err = fmt.Errorf("Каталог %q Git репозитория не найден", g.repDir)
-		logrus.WithField("Каталог", g.repDir).Error(err)
+		logrusRotate.StandardLogger().WithField("Каталог", g.repDir).Error(err)
 	}
 
 	cmd := exec.Command("git", "push")
@@ -181,11 +180,11 @@ func (g *Git) Add() (err error) {
 	// g.mu.Lock()
 	// defer g.mu.Unlock()
 
-	logrus.WithField("Каталог", g.repDir).Debug("GIT. Add")
+	logrusRotate.StandardLogger().WithField("Каталог", g.repDir).Debug("GIT. Add")
 
 	if _, err = os.Stat(g.repDir); os.IsNotExist(err) {
 		err = fmt.Errorf("Каталог %q Git репозитория не найден", g.repDir)
-		logrus.WithField("Каталог", g.repDir).Error(err)
+		logrusRotate.StandardLogger().WithField("Каталог", g.repDir).Error(err)
 	}
 
 	cmd := exec.Command("git", "add", ".")
@@ -200,17 +199,17 @@ func (g *Git) ResetHard(branch string) (err error) {
 	// g.mu.Lock()
 	// defer g.mu.Unlock()
 
-	logrus.WithField("branch", branch).WithField("Каталог", g.repDir).Debug("GIT. ResetHard")
+	logrusRotate.StandardLogger().WithField("branch", branch).WithField("Каталог", g.repDir).Debug("GIT. ResetHard")
 
 	if _, err = os.Stat(g.repDir); os.IsNotExist(err) {
 		err = fmt.Errorf("Каталог %q Git репозитория не найден", g.repDir)
-		logrus.WithField("Каталог", g.repDir).Error(err)
+		logrusRotate.StandardLogger().WithField("Каталог", g.repDir).Error(err)
 	}
 
 	if branch != "" {
 		g.Сheckout(branch, g.repDir, true)
 	}
-	logrus.WithField("branch", branch).WithField("Каталог", g.repDir).Debug("GIT. fetch")
+	logrusRotate.StandardLogger().WithField("branch", branch).WithField("Каталог", g.repDir).Debug("GIT. fetch")
 
 	cmd := exec.Command("git", "fetch", "origin")
 	run(cmd, g.repDir)
@@ -225,11 +224,11 @@ func (g *Git) ResetHard(branch string) (err error) {
 
 func (g *Git) optimization() (err error) {
 
-	logrus.WithField("Каталог", g.repDir).Debug("GIT. optimization")
+	logrusRotate.StandardLogger().WithField("Каталог", g.repDir).Debug("GIT. optimization")
 
 	if _, err = os.Stat(g.repDir); os.IsNotExist(err) {
 		err = fmt.Errorf("Каталог %q Git репозитория не найден", g.repDir)
-		logrus.WithField("Каталог", g.repDir).Error(err)
+		logrusRotate.StandardLogger().WithField("Каталог", g.repDir).Error(err)
 	}
 
 	cmd := exec.Command("git", "gc", "--auto")
@@ -245,13 +244,13 @@ func (g *Git) CommitAndPush(branch string) (err error) {
 	// g.mu.Lock()
 	// defer g.mu.Unlock()
 
-	logrus.WithField("Каталог", g.repDir).Debug("GIT. CommitAndPush")
+	logrusRotate.StandardLogger().WithField("Каталог", g.repDir).Debug("GIT. CommitAndPush")
 
-	defer func() { logrus.WithField("Каталог", g.repDir).Debug("end CommitAndPush") }()
+	defer func() { logrusRotate.StandardLogger().WithField("Каталог", g.repDir).Debug("end CommitAndPush") }()
 
 	if _, err = os.Stat(g.repDir); os.IsNotExist(err) {
 		err = fmt.Errorf("Каталог %q Git репозитория не найден", g.repDir)
-		logrus.WithField("Каталог", g.repDir).Error(err)
+		logrusRotate.StandardLogger().WithField("Каталог", g.repDir).Error(err)
 	}
 
 	err = g.Add()
@@ -292,7 +291,7 @@ func (g *Git) CommitAndPush(branch string) (err error) {
 }
 
 func run(cmd *exec.Cmd, dir string) (string, error) {
-	logrus.WithField("Исполняемый файл", cmd.Path).
+	logrusRotate.StandardLogger().WithField("Исполняемый файл", cmd.Path).
 		WithField("Параметры", cmd.Args).
 		WithField("Каталог", dir).
 		Debug("Выполняется команда git")
@@ -312,7 +311,7 @@ func run(cmd *exec.Cmd, dir string) (string, error) {
 		if stderr != "" {
 			errText += fmt.Sprintf("StdErr:%v \n", stderr)
 		}
-		logrus.WithField("Исполняемый файл", cmd.Path).
+		logrusRotate.StandardLogger().WithField("Исполняемый файл", cmd.Path).
 			WithField("Stdout", stdout).
 			Error(errText)
 		return stdout, fmt.Errorf(errText)

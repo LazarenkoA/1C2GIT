@@ -5,15 +5,83 @@
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
 
-        <title>Inbox</title>
+        <title>1C2GIT</title>
     
         <!-- Bootstrap CSS -->
         <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0-beta/css/bootstrap.min.css" integrity="sha384-/Y6pD6FV/Vv2HJnA6t+vslU6fwYXjCFtcEpHbNJ0lyAFsXTsjBbfaDjzALeQsN6M" crossorigin="anonymous">
         <style>
             .row { border-top: 1px solid silver;}
+            .autor { font-size:0.7rem; text-align: right; color:#b1b3b1; }
+            .comment { font-size: .8rem;text-align: left;color:#b1b3b1; }
         </style>
+
+        <!-- HTML content -->
+        <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.8.0/Chart.bundle.min.js"></script>
+        <script>
+            window.onload = function() {
+                backdata = document.getElementsByClassName('user');
+                if (backdata == null) {
+                    return;
+                }
+                labels = [];
+                data = [];
+                for (i = 0; i <= backdata.length-1; i++) {
+                    labels.push(backdata.item(i).getElementsByClassName("name").item(0).innerText);
+                    data.push(backdata.item(i).getElementsByClassName("count").item(0).innerText);
+                }
+
+                chartElement = document.getElementById('myChart')
+                if (chartElement == null) {
+                    return;
+                }
+                var ctx = chartElement.getContext('2d');
+                var myChart = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels:  labels,
+                        datasets: [{
+                            label: 'Количество за текущий месяц',
+                            data: data,
+                            backgroundColor: [
+                                'rgba(216, 27, 96, 0.6)',
+                                'rgba(3, 169, 244, 0.6)',
+                                'rgba(255, 152, 0, 0.6)'
+                            ],
+                            borderColor: [
+                                'rgba(216, 27, 96, 1)',
+                                'rgba(3, 169, 244, 1)',
+                                'rgba(255, 152, 0, 1)'
+                            ],
+                            borderWidth: 1
+                        }]
+                    },
+                    options: {
+                        legend: {
+                            display: false
+                        },
+                        title: {
+                            display: true,
+                            text: 'Количество коммитов',
+                            position: 'top',
+                            fontSize: 16,
+                            padding: 20
+                        },
+                        scales: {
+                            yAxes: [{
+                                ticks: {
+                                    min: 0,
+                                    max: Math.max.apply(null, data)
+                                }
+                            }]
+                        }
+                    }
+                });
+            }
+        </script>
     </head>
+
 <body>
+
 <div class="container">
     <div style="margin-bottom: 0px;">
         <h1>1C2GIT</h1>
@@ -22,7 +90,7 @@
 </div>
 
 <div class="container" id="messages">
-    {{range .}}
+    {{range .Log}}
     <div class="row">
         <div class="col-sm" style="max-width: 5%">
             {{if eq .type  1}}
@@ -33,20 +101,35 @@
         </div>
         <div class="col-sm">{{.msg}}
             {{if ne .type  1}}
-                <div style="font-size: .8rem;text-align: left;color:#b1b3b1;">{{.comment}}</div>
+                <div class="comment">{{.comment}}</div>
             {{end}}
         </div>
-
-        <!-- Если ошибка автора не будет -->
-        {{if ne .type  1}}
-            <div>
-                <div style=" font-size:0.7rem; text-align: right; color:#b1b3b1;">Автор: {{.autor}}</div>
-                <div style=" font-size:0.7rem; text-align: right; color:#b1b3b1;">{{.datetime}}</div>
-            </div>
-        {{end}}
+        <div>
+            <!-- Если ошибка автора не будет -->
+            {{if ne .type  1}}
+            <div class="autor">Автор: {{.autor}}</div>
+            {{end}}
+            <div class="autor">{{.datetime}}</div>
+        </div>
 
     </div>
     {{end}}
+
+    {{ if gt (len .СhartData) 0 }}
+    <div class="container">
+        <canvas id="myChart" width="600" height="400"></canvas>
+    </div>
+    {{end}}
+
+    <!-- В этом div данные для диаграммы -->
+    <div style="display: none">
+        {{range .СhartData}}
+            <div class="user">
+                <div class="name" >{{.Name}}</div>
+                <div class="count" >{{.Count}}</div>
+            </div>
+        {{end}}
+    </div>
 </div>
 
 <script>
@@ -60,13 +143,15 @@
         msgNode +='</div>';
         msgNode += '<div class="col-sm">'+msg.msg;
         if (msg.type != "1") {
-            msgNode += '<div style="font-size: .8rem;text-align: left;color:#b1b3b1;">' +msg.comment + '</div>'
+            msgNode += '<div class="comment">' +msg.comment + '</div>'
         }
         msgNode += '</div>';
 
         if (msg.type != "1") {
-            msgNode += '<div style=" font-size:0.7rem; text-align: right; color:#b1b3b1;">Автор: ' +msg.autor+ '</div>';
-            msgNode += '<div style=" font-size:0.7rem; text-align: right; color:#b1b3b1;">' +msg.datetime+ '</div>';
+            msgNode += '<div>';
+            msgNode += '<div class="autor">Автор: ' +msg.autor+ '</div>';
+            msgNode += '<div class="autor">' +msg.datetime+ '</div>';
+            msgNode += '</div>';
         }
 
 
