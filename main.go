@@ -72,7 +72,7 @@ func main() {
 
 	logchan = make(chan map[string]interface{}, 10)
 	wg := new(sync.WaitGroup)
-	mu := new(sync.Mutex)
+	mu, mu2 := new(sync.Mutex), new(sync.Mutex)
 
 	httpInitialise()
 
@@ -118,7 +118,7 @@ func main() {
 	rep.BinPath = sLoc.Bin1C
 	for _, r := range sLoc.RepositoryConf {
 		wg.Add(1)
-		go start(wg, mu, r, rep)
+		go start(wg, mu, mu2, r, rep)
 	}
 
 	fmt.Printf("Запуск ОК. Уровень логирования - %d\n", LogLevel)
@@ -250,7 +250,7 @@ func writeInfo(str, autor, comment string, datetime time.Time, t msgtype) {
 	logchan <- data
 }
 
-func start(wg *sync.WaitGroup, mu *sync.Mutex, r *settings.RepositoryConf, rep *ConfigurationRepository.Repository) {
+func start(wg *sync.WaitGroup, mu, mu2 *sync.Mutex, r *settings.RepositoryConf, rep *ConfigurationRepository.Repository) {
 	defer wg.Done()
 
 	if r.TimerMinute <= 0 {
@@ -268,7 +268,6 @@ func start(wg *sync.WaitGroup, mu *sync.Mutex, r *settings.RepositoryConf, rep *
 			}
 		}
 		GetLastVersion(vInfo)
-
 
 		logrusRotate.StandardLogger().WithField("Хранилище 1С", r.GetRepPath()).
 			WithField("Начальная ревизия", vInfo[r.GetRepPath()]).
@@ -320,8 +319,19 @@ func start(wg *sync.WaitGroup, mu *sync.Mutex, r *settings.RepositoryConf, rep *
 						return
 					}
 
-					vInfo[r.GetRepPath()] = _report.Version
-					SeveLastVersion(vInfo)
+					mu2.Lock()
+					func() {
+						defer mu2.Unlock()
+
+						// при записи в общий файл может получится потеря данных, когда данные последовательно считываются, потом в своем потоке меняется своя версия расширения
+						// при записи в файл версия другого расширения затирается
+						// по этому, перед тем как записать, еще раз считываем с диска
+						logrusRotate.StandardLogger().Debug("Повторное считывание версии")
+						GetLastVersion(vInfo)
+						vInfo[r.GetRepPath()] = _report.Version
+						SeveLastVersion(vInfo)
+					}()
+
 					logrusRotate.StandardLogger().WithField("Время", t).Debug("Синхронизация выполнена")
 					writeInfo(fmt.Sprintf("Синхронизация %v выполнена", r.GetRepPath()), _report.Author, _report.Comment, t, info)
 				}
