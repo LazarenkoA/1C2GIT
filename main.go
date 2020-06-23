@@ -375,7 +375,7 @@ func GetLastVersion(v map[string]int) {
 		return
 	}
 
-	err = yaml.Unmarshal(file, v)
+	err = yaml.Unmarshal(file, &v)
 	if err != nil {
 		logrusRotate.StandardLogger().WithField("файл", filePath).WithError(err).Warning("Ошибка чтения конфигурационного файла")
 		return
@@ -387,7 +387,6 @@ func SeveLastVersion(v map[string]int) {
 
 	currentDir, _ := os.Getwd()
 	filePath := filepath.Join(currentDir, "versions")
-
 
 	b, err := yaml.Marshal(v)
 	if err != nil {
