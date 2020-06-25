@@ -10,9 +10,12 @@
         <!-- Bootstrap CSS -->
         <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0-beta/css/bootstrap.min.css" integrity="sha384-/Y6pD6FV/Vv2HJnA6t+vslU6fwYXjCFtcEpHbNJ0lyAFsXTsjBbfaDjzALeQsN6M" crossorigin="anonymous">
         <style>
-            .row { border-top: 1px solid silver;}
+            /* .row { border-top: 1px solid silver;} */
+            .col-sm {padding-left: 25px;}
+            .container { margin-left: 25px; margin-right: unset; padding: unset;}
             .autor { font-size:0.7rem; text-align: right; color:#b1b3b1; }
             .comment { font-size: .8rem;text-align: left;color:#b1b3b1; }
+            .chartjs-size-monitor { align-self: flex-end;}
         </style>
 
         <!-- HTML content -->
@@ -82,44 +85,47 @@
 
 <body>
 
-<div class="container">
-    <div style="margin-bottom: 0px;">
-        <h1>1C2GIT</h1>
-        <p>Синхронизация хранилища 1С и Git</p>
+    <div class="container" >
+        <div style="margin-bottom: 0px;">
+            <h1>1C2GIT</h1>
+            <p>Синхронизация хранилища 1С и Git</p>
+        </div>
     </div>
-</div>
 
-<div class="container" id="messages">
-    {{range .Log}}
     <div class="row">
-        <div class="col-sm" style="max-width: 5%">
-            {{if eq .type  1}}
-                <img src="/img/error.png" width="16px" hight="15px" />
-            {{else}}
-                <img src="/img/success.png" width="16px" hight="15px" />
-            {{end}}
-        </div>
-        <div class="col-sm">{{.msg}}
-            {{if ne .type  1}}
-                <div class="comment">{{.comment}}</div>
-            {{end}}
-        </div>
-        <div>
-            <!-- Если ошибка автора не будет -->
-            {{if ne .type  1}}
-            <div class="autor">Автор: {{.autor}}</div>
-            {{end}}
-            <div class="autor">{{.datetime}}</div>
-        </div>
+    <div class="col-sm" id="messages" >
+        {{range .Log}}
+        <div class="row" style="border-top: 1px solid silver; ">
+            <div class="col-sm" style="max-width: 5%">
+                {{if eq .type  1}}
+                    <img src="/img/error.png" width="16px" hight="15px" />
+                {{else}}
+                    <img src="/img/success.png" width="16px" hight="15px" />
+                {{end}}
+            </div>
+            <div class="col-sm">{{.msg}}
+                {{if ne .type  1}}
+                    <div class="comment">{{.comment}}</div>
+                {{end}}
+            </div>
+            <div>
+                <!-- Если ошибка автора не будет -->
+                {{if ne .type  1}}
+                <div class="autor">Автор: {{.autor}}</div>
+                {{end}}
+                <div class="autor">{{.datetime}}</div>
+            </div>
 
+        </div>
+        {{end}}
     </div>
-    {{end}}
 
     {{ if gt (len .СhartData) 0 }}
-    <div class="container">
-        <canvas id="myChart" width="600" height="400"></canvas>
-    </div>
+        <div class="col-sm">
+            <canvas id="myChart"></canvas>
+        </div>
     {{end}}
+
 
     <!-- В этом div данные для диаграммы -->
     <div style="display: none">
@@ -130,52 +136,51 @@
             </div>
         {{end}}
     </div>
-</div>
 
-<script>
-    function newMessage(msg) {
-        msgNode = '<div class="col-sm" style="max-width: 5%">';
-        if (msg.type == "1") {
-             msgNode += '<img src="/img/error.png" width="16px" hight="15px" />';
-        } else {
-            msgNode += '<img src="/img/success.png" width="16px" hight="15px" />';
-        }
-        msgNode +='</div>';
-        msgNode += '<div class="col-sm">'+msg.msg;
-        if (msg.type != "1") {
-            msgNode += '<div class="comment">' +msg.comment + '</div>'
-        }
-        msgNode += '</div>';
-
-        if (msg.type != "1") {
-            msgNode += '<div>';
-            msgNode += '<div class="autor">Автор: ' +msg.autor+ '</div>';
-            msgNode += '<div class="autor">' +msg.datetime+ '</div>';
+    <script>
+        function newMessage(msg) {
+            msgNode = '<div class="col-sm" style="max-width: 5%">';
+            if (msg.type == "1") {
+                 msgNode += '<img src="/img/error.png" width="16px" hight="15px" />';
+            } else {
+                msgNode += '<img src="/img/success.png" width="16px" hight="15px" />';
+            }
+            msgNode +='</div>';
+            msgNode += '<div class="col-sm">'+msg.msg;
+            if (msg.type != "1") {
+                msgNode += '<div class="comment">' +msg.comment + '</div>'
+            }
             msgNode += '</div>';
+
+            if (msg.type != "1") {
+                msgNode += '<div>';
+                msgNode += '<div class="autor">Автор: ' +msg.autor+ '</div>';
+                msgNode += '<div class="autor">' +msg.datetime+ '</div>';
+                msgNode += '</div>';
+            }
+
+
+
+            var node = document.createElement("div");
+            node.className = "row";
+            node.innerHTML = msgNode;
+
+            rows = document.getElementsByClassName("row")
+            // выводим 15 элементов
+            for (var i = -(rows.length-1); i <= -15; i++) {
+                rows[-i].parentNode.removeChild(rows[-i]);
+            }
+
+            msgs = document.getElementById("messages")
+            msgs.insertBefore(node, msgs.childNodes[0]);
         }
 
-
-
-        var node = document.createElement("div");
-        node.className = "row";
-        node.innerHTML = msgNode;
-
-        rows = document.getElementsByClassName("row")
-        // выводим 15 элементов
-        for (var i = -(rows.length-1); i <= -15; i++) {
-            rows[-i].parentNode.removeChild(rows[-i]);
-        }
-
-        msgs = document.getElementById("messages")
-        msgs.insertBefore(node, msgs.childNodes[0]);
-    }
-    
-    conn = new WebSocket("ws://127.0.0.1:2020/notifications");
-    conn.onmessage = function (event) {
-        if(event.data != "") {
-            newMessage(JSON.parse(event.data));
-        }
-    };
-</script>
+        conn = new WebSocket("ws://127.0.0.1:2020/notifications");
+        conn.onmessage = function (event) {
+            if(event.data != "") {
+                newMessage(JSON.parse(event.data));
+            }
+        };
+    </script>
 </body>
 </html>
