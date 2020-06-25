@@ -144,7 +144,7 @@ func httpInitialise() {
 			var items []map[string]interface{}
 			var monthitems []map[string]interface{}
 
-			startMonth := time.Now().AddDate(0,0, -time.Now().Day())
+			startMonth := time.Date(time.Now().Year(), time.Now().Month(), 1, 0, 0,0,0, time.Local)
 			db.C("items").Find(bson.M{
 				"Time": bson.M{"$gt": startMonth, "$exists": true},
 			}).All(&monthitems)
