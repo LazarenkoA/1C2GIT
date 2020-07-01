@@ -149,6 +149,8 @@ func httpInitialise() {
 				"Time": bson.M{"$gt": startMonth, "$exists": true},
 			}).All(&monthitems)
 
+			logrusRotate.StandardLogger().WithField("start time", startMonth).Debug("Запрашиваем данные из БД. Получено данных", len(monthitems))
+
 			// группируем по автору
 			monthitemsGroup := map[string]int{}
 			for _, v := range monthitems {
