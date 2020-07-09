@@ -70,6 +70,7 @@ func main() {
 
 	lw := new(logrusRotate.Rotate).Construct()
 	defer lw.Start(LogLevel, new(RotateConf))()
+	logrus.SetFormatter(&logrus.JSONFormatter{})
 
 	logchan = make(chan map[string]interface{}, 10)
 	wg := new(sync.WaitGroup)
