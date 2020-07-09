@@ -21,6 +21,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -154,7 +155,7 @@ func httpInitialise() {
 			// группируем по автору
 			monthitemsGroup := map[string]int{}
 			for _, v := range monthitems {
-				monthitemsGroup[v["autor"].(string)]++
+				monthitemsGroup[strings.Trim(v["autor"].(string), " ")]++
 			}
 
 			chartData := []map[string]interface{}{}
