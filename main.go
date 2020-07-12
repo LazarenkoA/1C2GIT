@@ -132,7 +132,12 @@ func httpInitialise() {
 	fmt.Printf("Слушаем порт http %v\n", ListenPort)
 
 	currentDir, _ := os.Getwd()
-	tmpl := template.Must(template.ParseFiles(path.Join(currentDir, "html/index.html")))
+	indexhtml := path.Join(currentDir, "html/index.html")
+	if _, err := os.Stat(indexhtml); os.IsNotExist(err) {
+		logrus.WithField("Path", indexhtml).Error("Не найден index.html")
+		return
+	}
+	tmpl := template.Must(template.ParseFiles(indexhtml))
 	var upgrader = websocket.Upgrader{
 		ReadBufferSize:  1024,
 		WriteBufferSize: 1024,
