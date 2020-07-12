@@ -63,6 +63,9 @@ var (
 )
 
 func main() {
+	// создаем контейнед DI
+	container = di.New()
+
 	flag.IntVar(&LogLevel, "LogLevel", 3, "Уровень логирования от 2 до 5, где 2 - ошибка, 3 - предупреждение, 4 - информация, 5 - дебаг")
 	flag.Parse()
 	logrus.SetLevel(logrus.Level(2))
@@ -78,13 +81,10 @@ func main() {
 
 	httpInitialise()
 
-
 	mapUser = make(map[string]string)
 	currentDir, _ := os.Getwd()
 	settings.ReadSettings(path.Join(currentDir, "Confs", "MapUsers.conf"), &mapUser)
 
-	// создаем контейнед DI
-	container = di.New()
 	container.Provide(func() *settings.Setting {
 		s := new(settings.Setting)
 		settings.ReadSettings(path.Join(currentDir, "Confs", "Config.conf"), s)
