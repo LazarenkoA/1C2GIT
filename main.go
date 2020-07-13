@@ -31,8 +31,7 @@ import (
 	mgo "gopkg.in/mgo.v2"
 )
 
-var mapUser map[string]string
-type RotateConf struct {}
+type RotateConf struct{}
 type msgtype byte
 
 const (
@@ -56,18 +55,30 @@ func (h *Hook) Fire(En *logrus.Entry) error {
 }
 
 var (
-	LogLevel int
-	limit int = 15
+	LogLevel  int
+	limit     int = 15
 	container *di.Container
-	logchan chan map[string]interface{}
+	logchan   chan map[string]interface{}
+	mapUser   map[string]string
+	help      bool
 )
 
-func main() {
+func init() {
 	// создаем контейнед DI
 	container = di.New()
 
+	logchan = make(chan map[string]interface{}, 10)
+	mapUser = make(map[string]string)
 	flag.IntVar(&LogLevel, "LogLevel", 3, "Уровень логирования от 2 до 5, где 2 - ошибка, 3 - предупреждение, 4 - информация, 5 - дебаг")
+	flag.BoolVar(&help, "help", false, "Помощь")
+}
+
+func main() {
 	flag.Parse()
+	if help {
+		flag.Usage()
+		return
+	}
 	logrus.SetLevel(logrus.Level(2))
 	logrus.AddHook(new(Hook))
 
@@ -75,13 +86,11 @@ func main() {
 	defer lw.Start(LogLevel, new(RotateConf))()
 	logrus.SetFormatter(&logrus.JSONFormatter{})
 
-	logchan = make(chan map[string]interface{}, 10)
 	wg := new(sync.WaitGroup)
 	mu, mu2 := new(sync.Mutex), new(sync.Mutex)
 
 	httpInitialise()
 
-	mapUser = make(map[string]string)
 	currentDir, _ := os.Getwd()
 	settings.ReadSettings(path.Join(currentDir, "Confs", "MapUsers.conf"), &mapUser)
 
@@ -98,7 +107,6 @@ func main() {
 		return tmp
 	})
 
-
 	// для тестирования
 	//go func() {
 	//	timer := time.NewTicker(time.Second * 5)
@@ -106,7 +114,6 @@ func main() {
 	//		writeInfo(fmt.Sprintf("test - %v", t.Second()), fake.FullName(), "", t, info)
 	//	}
 	//}()
-
 
 	var sLoc *settings.Setting
 	if err := container.Invoke(func(s *settings.Setting) {
@@ -151,7 +158,7 @@ func httpInitialise() {
 			var items []map[string]interface{}
 			var monthitems []map[string]interface{}
 
-			startMonth := time.Date(time.Now().Year(), time.Now().Month(), 1, 0, 0,0,0, time.Local)
+			startMonth := time.Date(time.Now().Year(), time.Now().Month(), 1, 0, 0, 0, 0, time.Local)
 			db.C("items").Find(bson.M{
 				"Time": bson.M{"$gt": startMonth, "$exists": true},
 			}).All(&monthitems)
@@ -171,18 +178,18 @@ func httpInitialise() {
 
 			// bson.M{} - это типа условия для поиска
 			if err := db.C("items").Find(bson.M{"Time": bson.M{"$exists": true}}).Sort("-Time").Limit(limit).All(&items); err == nil {
-				tmpl.Execute(w,  struct {
-					Log[]map[string]interface{}
-					СhartData[]map[string]interface{}
-				}{items,  chartData} )
+				tmpl.Execute(w, struct {
+					Log       []map[string]interface{}
+					СhartData []map[string]interface{}
+				}{items, chartData})
 			} else {
 				logrusRotate.StandardLogger().WithError(err).Error("Ошибка получения данных из БД")
 			}
 		}); err != nil {
 			container.Invoke(func(logBufer *[]map[string]interface{}) {
 				tmpl.Execute(w, struct {
-					Log []map[string]interface{}
-					СhartData[]map[string]interface{}
+					Log       []map[string]interface{}
+					СhartData []map[string]interface{}
 				}{*logBufer, []map[string]interface{}{}})
 			})
 		}
@@ -234,12 +241,12 @@ func writeInfo(str, autor, comment string, datetime time.Time, t msgtype) {
 
 	data := map[string]interface{}{
 		//"_id": bson.NewObjectId(),
-		"msg":   str,
+		"msg":      str,
 		"datetime": datetime.Format("02.01.2006 (15:04)"),
-		"comment":   comment,
-		"type":  t,
-		"autor": autor,
-		"Time" : datetime,
+		"comment":  comment,
+		"type":     t,
+		"autor":    autor,
+		"Time":     datetime,
 	}
 
 	if err := container.Invoke(func(db *mgo.Database) {
@@ -417,7 +424,7 @@ func SeveLastVersion(v map[string]int) {
 	}
 }
 
-func connectToDB(s *settings.Setting) (*mgo.Database, error)  {
+func connectToDB(s *settings.Setting) (*mgo.Database, error) {
 	if s.Mongo == nil {
 		return nil, errors.New("MongoDB not use")
 	}
@@ -425,7 +432,7 @@ func connectToDB(s *settings.Setting) (*mgo.Database, error)  {
 	if sess, err := mgo.Dial(s.Mongo.ConnectionString); err == nil {
 		return sess.DB("1C2GIT"), nil
 	} else {
-		return  nil, err
+		return nil, err
 	}
 }
 
