@@ -1,10 +1,10 @@
 package main
 
 import (
-	ConfigurationRepository "1C2GIT/Configuration"
-	settings "1C2GIT/Confs"
-	git "1C2GIT/Git"
-	"Teaching/github.com/pkg/errors"
+	ConfigurationRepository "github.com/LazarenkoA/1C2GIT/Configuration"
+	settings "github.com/LazarenkoA/1C2GIT/Confs"
+	git "github.com/LazarenkoA/1C2GIT/Git"
+	"errors"
 	"context"
 	"crypto/sha1"
 	"encoding/json"
