@@ -1,15 +1,14 @@
 package main
 
 import (
-	ConfigurationRepository "github.com/LazarenkoA/1C2GIT/Configuration"
-	settings "github.com/LazarenkoA/1C2GIT/Confs"
-	git "github.com/LazarenkoA/1C2GIT/Git"
-	"errors"
 	"context"
 	"crypto/sha1"
 	"encoding/json"
-	"flag"
+	"errors"
 	"fmt"
+	ConfigurationRepository "github.com/LazarenkoA/1C2GIT/Configuration"
+	settings "github.com/LazarenkoA/1C2GIT/Confs"
+	git "github.com/LazarenkoA/1C2GIT/Git"
 	logrusRotate "github.com/LazarenkoA/LogrusRotate"
 	"gopkg.in/mgo.v2/bson"
 	"gopkg.in/yaml.v2"
@@ -28,6 +27,7 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/sirupsen/logrus"
 	di "go.uber.org/dig"
+	kingpin "gopkg.in/alecthomas/kingpin.v2"
 	mgo "gopkg.in/mgo.v2"
 )
 
@@ -55,12 +55,12 @@ func (h *Hook) Fire(En *logrus.Entry) error {
 }
 
 var (
-	LogLevel  int
+	LogLevel  *int
 	limit     int = 15
 	container *di.Container
 	logchan   chan map[string]interface{}
 	mapUser   map[string]string
-	help      bool
+	kp *kingpin.Application
 )
 
 func init() {
@@ -69,21 +69,25 @@ func init() {
 
 	logchan = make(chan map[string]interface{}, 10)
 	mapUser = make(map[string]string)
-	flag.IntVar(&LogLevel, "LogLevel", 3, "Уровень логирования от 2 до 5, где 2 - ошибка, 3 - предупреждение, 4 - информация, 5 - дебаг")
-	flag.BoolVar(&help, "help", false, "Помощь")
+
+	kp = kingpin.New("1C2GIT", "Приложение для синхронизации хранилища 1С и Git")
+	LogLevel = kp.Flag("LogLevel", "Уровень логирования от 2 до 5\n" +
+		"\t2 - ошибка\n" +
+		"\t3 - предупреждение\n" +
+		"\t4 - информация\n" +
+		"\t5 - дебаг\n").
+		Short('l').Default("3").Int()
+
+	//flag.BoolVar(&help, "help", false, "Помощь")
 }
 
 func main() {
-	flag.Parse()
-	if help {
-		flag.Usage()
-		return
-	}
+	kp.Parse(os.Args[1:])
 	logrus.SetLevel(logrus.Level(2))
 	logrus.AddHook(new(Hook))
 
 	lw := new(logrusRotate.Rotate).Construct()
-	defer lw.Start(LogLevel, new(RotateConf))()
+	defer lw.Start(*LogLevel, new(RotateConf))()
 	logrus.SetFormatter(&logrus.JSONFormatter{})
 
 	wg := new(sync.WaitGroup)
