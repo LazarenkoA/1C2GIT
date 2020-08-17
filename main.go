@@ -134,7 +134,7 @@ func main() {
 		go start(wg, mu, mu2, r, rep)
 	}
 
-	fmt.Printf("Запуск ОК. Уровень логирования - %d\n", LogLevel)
+	fmt.Printf("Запуск ОК. Уровень логирования - %d\n", *LogLevel)
 	wg.Wait()
 }
 
@@ -167,7 +167,7 @@ func httpInitialise() {
 				"Time": bson.M{"$gt": startMonth, "$exists": true},
 			}).All(&monthitems)
 
-			logrusRotate.StandardLogger().WithField("start time", startMonth).Debug("Запрашиваем данные из БД. Получено данных", len(monthitems))
+			logrusRotate.StandardLogger().WithField("start time", startMonth).Debug("Запрашиваем данные из БД. Получено данных ", len(monthitems))
 
 			// группируем по автору
 			monthitemsGroup := map[string]int{}
@@ -436,6 +436,7 @@ func connectToDB(s *settings.Setting) (*mgo.Database, error) {
 	if sess, err := mgo.Dial(s.Mongo.ConnectionString); err == nil {
 		return sess.DB("1C2GIT"), nil
 	} else {
+		logrusRotate.StandardLogger().WithError(err).Error("Ошибка подключения к MongoDB")
 		return nil, err
 	}
 }
