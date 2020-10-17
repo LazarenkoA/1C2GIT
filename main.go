@@ -60,7 +60,7 @@ var (
 	container *di.Container
 	logchan   chan map[string]interface{}
 	mapUser   map[string]string
-	kp *kingpin.Application
+	kp        *kingpin.Application
 )
 
 func init() {
@@ -71,10 +71,10 @@ func init() {
 	mapUser = make(map[string]string)
 
 	kp = kingpin.New("1C2GIT", "Приложение для синхронизации хранилища 1С и Git")
-	LogLevel = kp.Flag("LogLevel", "Уровень логирования от 2 до 5\n" +
-		"\t2 - ошибка\n" +
-		"\t3 - предупреждение\n" +
-		"\t4 - информация\n" +
+	LogLevel = kp.Flag("LogLevel", "Уровень логирования от 2 до 5\n"+
+		"\t2 - ошибка\n"+
+		"\t3 - предупреждение\n"+
+		"\t4 - информация\n"+
 		"\t5 - дебаг\n").
 		Short('l').Default("3").Int()
 
@@ -322,7 +322,7 @@ func start(wg *sync.WaitGroup, mu, mu2 *sync.Mutex, r *settings.RepositoryConf, 
 
 				// Запоминаем версию конфигурации. Сделано это потому что версия инерементируется в файлах, а не в хранилище 1С, что бы не перезатиралось.
 				// TODO: подумать как обыграть это в настройках, а-ля файлы исключения, для xml файлов можно прикрутить xpath, что бы сохранять значение определенных узлов (как раз наш случай с версией)
-				r.SaveVersion()
+				//r.SaveVersion()
 				// Очищаем каталог перед выгрузкой, это нужно на случай если удаляется какой-то объект
 				os.RemoveAll(r.GetOutDir())
 
@@ -333,7 +333,7 @@ func start(wg *sync.WaitGroup, mu, mu2 *sync.Mutex, r *settings.RepositoryConf, 
 						Error("Ошибка выгрузки файлов из хранилища")
 					return
 				} else {
-					r.RestoreVersion() // восстанавливаем версию перед коммитом
+					r.RestoreVersion(_report.Version) // заисываем версию перед коммитом
 					if err := git.CommitAndPush(r.To.Branch); err != nil {
 						logrusRotate.StandardLogger().Errorf("Ошибка при выполнении push & commit: %v", err)
 						return

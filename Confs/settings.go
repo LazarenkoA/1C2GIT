@@ -8,10 +8,10 @@ import (
 	"os"
 	"path"
 	"regexp"
+	"strconv"
 
 	xmlpath "gopkg.in/xmlpath.v2"
 )
-
 
 type RepositoryConf struct {
 	TimerMinute int `json:"TimerMinute"`
@@ -31,7 +31,7 @@ type RepositoryConf struct {
 type Setting struct {
 	Bin1C          string            `json:"Bin1C"`
 	RepositoryConf []*RepositoryConf `json:"RepositoryConf"`
-	Mongo *struct{
+	Mongo          *struct {
 		ConnectionString string
 	} `json:"Mongo"`
 }
@@ -55,7 +55,6 @@ func ReadSettings(Filepath string, data interface{}) {
 	}
 }
 
-
 func (r *RepositoryConf) GetRepPath() string {
 	return r.From.Rep
 }
@@ -76,6 +75,7 @@ func (r *RepositoryConf) GetOutDir() string {
 	return r.To.RepDir
 }
 
+// legacy
 func (this *RepositoryConf) SaveVersion() {
 	logrusRotate.StandardLogger().WithField("Репозиторий", this.To.RepDir).WithField("Версия", this.version).Debug("Сохраняем версию расширения")
 
@@ -109,7 +109,7 @@ func (this *RepositoryConf) SaveVersion() {
 
 }
 
-func (this *RepositoryConf) RestoreVersion() {
+func (this *RepositoryConf) RestoreVersion(version int) {
 	logrusRotate.StandardLogger().WithField("Репозиторий", this.To.RepDir).WithField("Версия", this.version).Debug("Восстанавливаем версию расширения")
 
 	ConfigurationFile := path.Join(this.To.RepDir, "Configuration.xml")
@@ -118,7 +118,7 @@ func (this *RepositoryConf) RestoreVersion() {
 		return
 	}
 
-	// Меняем версию, без парсинга, поменять значение одного узла прям проблема, а повторять структуру xml в классе ой как не хочется
+	// Меняем версию, без парсинга, поменять значение одного узла прям проблема, а повторять структуру xml в структуре ой как не хочется
 	// Читаем файл
 	file, err := os.Open(ConfigurationFile)
 	if err != nil {
@@ -137,7 +137,8 @@ func (this *RepositoryConf) RestoreVersion() {
 
 	xml := string(buf)
 	reg := regexp.MustCompile(`(?i)(?:<Version>(.+?)<\/Version>|<Version\/>)`)
-	xml = reg.ReplaceAllString(xml, "<Version>"+this.version+"</Version>")
+	//xml = reg.ReplaceAllString(xml, "<Version>"+this.version+"</Version>")
+	xml = reg.ReplaceAllString(xml, "<Version>"+strconv.Itoa(version)+"</Version>")
 
 	// сохраняем файл
 	file, err = os.OpenFile(ConfigurationFile, os.O_CREATE, os.ModeExclusive)
