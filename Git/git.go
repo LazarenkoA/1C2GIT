@@ -70,11 +70,11 @@ func (g *Git) Destroy() {
 	logrusRotate.StandardLogger().WithField("Environ", os.Environ()).Debug("Восстанавливаем переменные окружения")
 }
 
-func (g *Git) Сheckout(branch, repDir string, notLock bool) error {
-	logrusRotate.StandardLogger().WithField("Каталог", g.repDir).Debug("GIT. Сheckout")
+func (g *Git) Checkout(branch, repDir string, notLock bool) error {
+	logrusRotate.StandardLogger().WithField("Каталог", g.repDir).Debug("GIT. Checkout")
 
 	// notLock нужен для того, что бы не заблокировать самого себя, например вызов такой
-	// CommitAndPush - Pull - Сheckout, в этом случаи не нужно лочить т.к. в CommitAndPush уже залочено
+	// CommitAndPush - Pull - Checkout, в этом случаи не нужно лочить т.к. в CommitAndPush уже залочено
 	// if !notLock {
 	// 	g.mu.Lock()
 	// 	defer g.mu.Unlock()
@@ -147,7 +147,7 @@ func (g *Git) Pull(branch string) (err error) {
 	}
 
 	if branch != "" {
-		g.Сheckout(branch, g.repDir, true)
+		g.Checkout(branch, g.repDir, true)
 	}
 
 	cmd := exec.Command("git", "pull")
@@ -207,7 +207,7 @@ func (g *Git) ResetHard(branch string) (err error) {
 	}
 
 	if branch != "" {
-		g.Сheckout(branch, g.repDir, true)
+		g.Checkout(branch, g.repDir, true)
 	}
 	logrusRotate.StandardLogger().WithField("branch", branch).WithField("Каталог", g.repDir).Debug("GIT. fetch")
 
@@ -306,7 +306,7 @@ func run(cmd *exec.Cmd, dir string) (string, error) {
 
 	// Гит странный, вроде информационное сообщение как "nothing to commit, working tree clean" присылает в Stderr и статус выполнения 1, ну еба...
 	// приходится костылить
-	if err != nil && !strings.Contains(stdout, "nothing to commit")  {
+	if err != nil && !strings.Contains(stdout, "nothing to commit") {
 		errText := fmt.Sprintf("Произошла ошибка запуска:\n err:%v \n Параметры: %v", string(err.Error()), cmd.Args)
 		if stderr != "" {
 			errText += fmt.Sprintf("StdErr:%v \n", stderr)
