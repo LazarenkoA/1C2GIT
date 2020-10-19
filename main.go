@@ -200,11 +200,21 @@ func httpInitialise() {
 	})
 
 	// статический контент
-	staticHandler := http.StripPrefix(
+	staticHandlerimg := http.StripPrefix(
 		"/img/",
 		http.FileServer(http.Dir("html/img")),
 	)
-	http.Handle("/img/", staticHandler)
+	staticHandlercss := http.StripPrefix(
+		"/css/",
+		http.FileServer(http.Dir("html/css")),
+	)
+	staticHandlerscript := http.StripPrefix(
+		"/script/",
+		http.FileServer(http.Dir("html/script")),
+	)
+	http.Handle("/img/", staticHandlerimg)
+	http.Handle("/css/", staticHandlercss)
+	http.Handle("/script/", staticHandlerscript)
 
 	// Пояснение:
 	// эта горутина нужна что бы читать из канала до того пока не загрузится http страничка (notifications)
