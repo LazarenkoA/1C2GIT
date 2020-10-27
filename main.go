@@ -10,6 +10,7 @@ import (
 	settings "github.com/LazarenkoA/1C2GIT/Confs"
 	git "github.com/LazarenkoA/1C2GIT/Git"
 	logrusRotate "github.com/LazarenkoA/LogrusRotate"
+	tfs "github.com/LazarenkoA/1C2GIT/TFS"
 	"gopkg.in/mgo.v2/bson"
 	"gopkg.in/yaml.v2"
 	"html/template"
@@ -20,6 +21,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -45,6 +47,7 @@ const (
 
 type Hook struct {
 }
+type event func(r *settings.RepositoryConf, repInfo *ConfigurationRepository.RepositoryInfo)
 
 func (h *Hook) Levels() []logrus.Level {
 	return []logrus.Level{logrus.ErrorLevel, logrus.PanicLevel}
@@ -61,6 +64,8 @@ var (
 	logchan   chan map[string]interface{}
 	mapUser   map[string]string
 	kp        *kingpin.Application
+	eventsBeforeCommit []event
+	eventsAfterCommit []event
 )
 
 func init() {
@@ -94,22 +99,8 @@ func main() {
 	mu, mu2 := new(sync.Mutex), new(sync.Mutex)
 
 	httpInitialise()
+	initDIProvide()
 
-	currentDir, _ := os.Getwd()
-	settings.ReadSettings(path.Join(currentDir, "Confs", "MapUsers.conf"), &mapUser)
-
-	container.Provide(func() *settings.Setting {
-		s := new(settings.Setting)
-		settings.ReadSettings(path.Join(currentDir, "Confs", "Config.conf"), s)
-		return s
-	})
-	container.Provide(func(s *settings.Setting) (*mgo.Database, error) {
-		return connectToDB(s)
-	})
-	tmp := &[]map[string]interface{}{} // в контейнере храним ссылку на слайс, что бы не приходилось обновлять каждый раз значение в контейнере
-	container.Provide(func() *[]map[string]interface{} {
-		return tmp
-	})
 
 	// для тестирования
 	//go func() {
@@ -125,9 +116,9 @@ func main() {
 	}); err != nil {
 		logrusRotate.StandardLogger().WithError(err).Panic("Не удалось прочитать настройки")
 	}
+	initEvents()
 
 	rep := new(ConfigurationRepository.Repository).New()
-	//defer rep.Destroy()
 	rep.BinPath = sLoc.Bin1C
 	for _, r := range sLoc.RepositoryConf {
 		wg.Add(1)
@@ -136,6 +127,24 @@ func main() {
 
 	fmt.Printf("Запуск ОК. Уровень логирования - %d\n", *LogLevel)
 	wg.Wait()
+}
+
+func initDIProvide()  {
+	currentDir, _ := os.Getwd()
+	settings.ReadSettings(path.Join(currentDir, "Confs", "MapUsers.conf"), &mapUser)
+
+	container.Provide(func() *settings.Setting {
+		s := new(settings.Setting)
+		settings.ReadSettings(path.Join(currentDir, "Confs", "Config.conf"), s)
+		return s
+	})
+	container.Provide(func(s *settings.Setting) (*mgo.Database, error) {
+		return connectToDB(s)
+	})
+	tmp := &[]map[string]interface{}{} // в контейнере храним ссылку на слайс, что бы не приходилось обновлять каждый раз значение в контейнере
+	container.Provide(func() *[]map[string]interface{} {
+		return tmp
+	})
 }
 
 func httpInitialise() {
@@ -343,12 +352,15 @@ func start(wg *sync.WaitGroup, mu, mu2 *sync.Mutex, r *settings.RepositoryConf, 
 						Error("Ошибка выгрузки файлов из хранилища")
 					return
 				} else {
-					r.RestoreVersion(_report.Version) // заисываем версию перед коммитом
+					for _, e := range eventsBeforeCommit {
+						e(r, _report)
+					}
 					if err := git.CommitAndPush(r.To.Branch); err != nil {
-						logrusRotate.StandardLogger().Errorf("Ошибка при выполнении push & commit: %v", err)
+						logrusRotate.StandardLogger().WithError(err).Error("Ошибка при выполнении push & commit")
 						return
 					}
-
+					
+					// Сохранение версии в файл
 					mu2.Lock()
 					func() {
 						defer mu2.Unlock()
@@ -362,6 +374,9 @@ func start(wg *sync.WaitGroup, mu, mu2 *sync.Mutex, r *settings.RepositoryConf, 
 						SeveLastVersion(vInfo)
 					}()
 
+					for _, e := range eventsAfterCommit {
+						e(r, _report)
+					}
 					logrusRotate.StandardLogger().WithField("Время", t).Debug("Синхронизация выполнена")
 					writeInfo(fmt.Sprintf("Синхронизация %v выполнена", r.GetRepPath()), _report.Author, _report.Comment, t, info)
 				}
@@ -372,9 +387,12 @@ func start(wg *sync.WaitGroup, mu, mu2 *sync.Mutex, r *settings.RepositoryConf, 
 
 	logrusRotate.StandardLogger().WithField("Хранилище 1С", r.GetRepPath()).Debugf("Таймер по %d минут", r.TimerMinute)
 	timer := time.NewTicker(time.Minute * time.Duration(r.TimerMinute))
-	invoke(time.Now()) // первый раз при запуске, потом будет по таймеру. Сделано так, что бы не ждать наступления события при запуске
-	for time := range timer.C {
+	defer timer.Stop()
+
+	time := time.Now()
+	for {
 		invoke(time)
+		time = <- timer.C
 	}
 }
 
@@ -448,6 +466,38 @@ func connectToDB(s *settings.Setting) (*mgo.Database, error) {
 	} else {
 		logrusRotate.StandardLogger().WithError(err).Error("Ошибка подключения к MongoDB")
 		return nil, err
+	}
+}
+
+func initEvents() {
+	var _tfs *tfs.TFSProvider
+	if err := container.Invoke(func(s *settings.Setting) {
+		_tfs = new(tfs.TFSProvider).New(s)
+	}); err != nil {
+		logrusRotate.StandardLogger().WithError(err).Panic("Не удалось получить настройки из DI контейнера")
+	}
+
+	eventsBeforeCommit = []event{
+		func(r *settings.RepositoryConf, repInfo *ConfigurationRepository.RepositoryInfo) {
+			r.RestoreVersion(repInfo.Version) // заисываем версию перед коммитом
+		},
+	}
+	eventsAfterCommit = []event {
+		func(r *settings.RepositoryConf, repInfo *ConfigurationRepository.RepositoryInfo) {
+			// запись комментария в ТФС
+
+			re := regexp.MustCompile(`(?m)#[\d]+`)
+			all := re.FindAllString(repInfo.Comment, -1)
+			ids := make([]string, len(all))
+			for i, str := range all {
+				ids[i] = strings.Replace(str, "#", "", 1)
+			}
+
+			logrusRotate.StandardLogger().WithField("WI count", len(ids)).WithField("Comment", repInfo.Comment).Info("Создаем комментарий в ТФС")
+			if len(ids) > 0 {
+				_tfs.CreateComment(ids, fmt.Sprintf("Автодобавленный комментарий. По задаче внесены изменения в расширение %q, версия %d", r.GetRepPath(), repInfo.Version))
+			}
+		},
 	}
 }
 

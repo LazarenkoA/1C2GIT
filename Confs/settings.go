@@ -34,24 +34,25 @@ type Setting struct {
 	Mongo          *struct {
 		ConnectionString string
 	} `json:"Mongo"`
+	TFS *struct {
+		URL string `json:"URL"`
+		KEY string `json:"KEY"`
+	} `json:"TFS"`
 }
 
 func ReadSettings(Filepath string, data interface{}) {
 	if _, err := os.Stat(Filepath); os.IsNotExist(err) {
 		logrusRotate.StandardLogger().WithField("файл", Filepath).Panic("Конфигурационный файл не найден")
-		return
 	}
 
 	file, err := ioutil.ReadFile(Filepath)
 	if err != nil {
 		logrusRotate.StandardLogger().WithField("файл", Filepath).WithError(err).Panic("Ошибка открытия файла")
-		return
 	}
 
 	err = json.Unmarshal(file, data)
 	if err != nil {
 		logrusRotate.StandardLogger().WithField("файл", Filepath).WithError(err).Panic("Ошибка чтения конфигурационного файла")
-		return
 	}
 }
 

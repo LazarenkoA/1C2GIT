@@ -113,6 +113,7 @@ func (this *Repository) createTmpBD(createExtension bool) (error, string) {
 	return nil, tmpDBPath
 }
 
+// Выгрузка конфигурации в файлы
 func (this *Repository) DownloadConfFiles(DataRep IRepository, version int) (err error) {
 	defer func() {
 		if er := recover(); er != nil {
