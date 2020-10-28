@@ -9,8 +9,8 @@ import (
 	ConfigurationRepository "github.com/LazarenkoA/1C2GIT/Configuration"
 	settings "github.com/LazarenkoA/1C2GIT/Confs"
 	git "github.com/LazarenkoA/1C2GIT/Git"
-	logrusRotate "github.com/LazarenkoA/LogrusRotate"
 	tfs "github.com/LazarenkoA/1C2GIT/TFS"
+	logrusRotate "github.com/LazarenkoA/LogrusRotate"
 	"gopkg.in/mgo.v2/bson"
 	"gopkg.in/yaml.v2"
 	"html/template"
@@ -58,14 +58,14 @@ func (h *Hook) Fire(En *logrus.Entry) error {
 }
 
 var (
-	LogLevel  *int
-	limit     int = 15
-	container *di.Container
-	logchan   chan map[string]interface{}
-	mapUser   map[string]string
-	kp        *kingpin.Application
+	LogLevel           *int
+	limit              int = 15
+	container          *di.Container
+	logchan            chan map[string]interface{}
+	mapUser            map[string]string
+	kp                 *kingpin.Application
 	eventsBeforeCommit []event
-	eventsAfterCommit []event
+	eventsAfterCommit  []event
 )
 
 func init() {
@@ -101,7 +101,6 @@ func main() {
 	httpInitialise()
 	initDIProvide()
 
-
 	// для тестирования
 	//go func() {
 	//	timer := time.NewTicker(time.Second * 5)
@@ -129,7 +128,7 @@ func main() {
 	wg.Wait()
 }
 
-func initDIProvide()  {
+func initDIProvide() {
 	currentDir, _ := os.Getwd()
 	settings.ReadSettings(path.Join(currentDir, "Confs", "MapUsers.conf"), &mapUser)
 
@@ -273,7 +272,10 @@ func writeInfo(str, autor, comment string, datetime time.Time, t msgtype) {
 	}
 
 	if err := container.Invoke(func(db *mgo.Database) {
-		db.C("items").Insert(data)
+		// Ошибки в монго не добавляем, нет смысла
+		if t != err {
+			db.C("items").Insert(data)
+		}
 	}); err != nil {
 		container.Invoke(func(logBufer *[]map[string]interface{}) {
 			// нужно на первое место поставить элемент, массив ограничиваем limit записями
@@ -359,7 +361,7 @@ func start(wg *sync.WaitGroup, mu, mu2 *sync.Mutex, r *settings.RepositoryConf, 
 						logrusRotate.StandardLogger().WithError(err).Error("Ошибка при выполнении push & commit")
 						return
 					}
-					
+
 					// Сохранение версии в файл
 					mu2.Lock()
 					func() {
@@ -392,7 +394,7 @@ func start(wg *sync.WaitGroup, mu, mu2 *sync.Mutex, r *settings.RepositoryConf, 
 	time := time.Now()
 	for {
 		invoke(time)
-		time = <- timer.C
+		time = <-timer.C
 	}
 }
 
@@ -482,7 +484,7 @@ func initEvents() {
 			r.RestoreVersion(repInfo.Version) // заисываем версию перед коммитом
 		},
 	}
-	eventsAfterCommit = []event {
+	eventsAfterCommit = []event{
 		func(r *settings.RepositoryConf, repInfo *ConfigurationRepository.RepositoryInfo) {
 			// запись комментария в ТФС
 
