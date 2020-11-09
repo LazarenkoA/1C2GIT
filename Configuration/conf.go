@@ -2,6 +2,7 @@ package ConfigurationRepository
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -336,9 +337,7 @@ func (this *Repository) run(cmd *exec.Cmd, fileLog string) (err error) {
 	defer func() {
 		if er := recover(); er != nil {
 			err = fmt.Errorf("%v", er)
-			logrus.
-				WithField("Параметры", cmd.Args).
-				Errorf("Произошла ошибка при выполнении %q", cmd.Path)
+			logrus.WithField("Параметры", cmd.Args).Errorf("Произошла ошибка при выполнении %q", cmd.Path)
 		}
 	}()
 
@@ -346,9 +345,10 @@ func (this *Repository) run(cmd *exec.Cmd, fileLog string) (err error) {
 		WithField("Параметры", cmd.Args).
 		Debug("Выполняется команда пакетного запуска")
 
-	//cmd.Stdin = strings.NewReader("some input")
+	timeout := time.Hour
 	cmd.Stdout = new(bytes.Buffer)
 	cmd.Stderr = new(bytes.Buffer)
+	errch := make(chan error, 1)
 
 	readErrFile := func() string {
 		if err, buf := ReadFile(fileLog, charmap.Windows1251.NewDecoder()); err == nil {
@@ -359,20 +359,35 @@ func (this *Repository) run(cmd *exec.Cmd, fileLog string) (err error) {
 		}
 	}
 
-	err = cmd.Run()
-	stderr := cmd.Stderr.(*bytes.Buffer).String()
+	err = cmd.Start()
 	if err != nil {
-		logrus.WithField("Исполняемый файл", cmd.Path).Panic(fmt.Errorf("Произошла ошибка запуска:"+
-			"err: %q"+
-			"OutErrFile: %q", string(err.Error()), readErrFile())) // в defer перехват
-	}
-	if stderr != "" {
-		logrus.WithField("Исполняемый файл", cmd.Path).Panic(fmt.Errorf("Произошла ошибка запуска:"+
-			"StdErr: %q"+
-			"OutErrFile: %q", stderr, readErrFile())) // в defer перехват
+		return fmt.Errorf("Произошла ошибка запуска:\n\terr:%v\n\tПараметры: %v\n\t", err.Error(), cmd.Args)
 	}
 
-	return err
+	// запускаем в горутине т.к. наблюдалось что при выполнении RAC может происходить зависон, нам нужен таймаут
+	go func() {
+		errch <- cmd.Wait()
+	}()
+
+	select {
+	case <-time.After(timeout): // timeout
+		return fmt.Errorf("Выполнение команды прервано по таймауту\n\tПараметры: %v\n\t", cmd.Args)
+	case err := <-errch:
+		if err != nil {
+			stderr := cmd.Stderr.(*bytes.Buffer).String()
+			errText := fmt.Sprintf("Произошла ошибка запуска:\n\terr:%v\n\tПараметры: %v\n\t", err.Error(), cmd.Args)
+			if stderr != "" {
+				errText += fmt.Sprintf("StdErr:%v\n", stderr)
+			}
+			logrus.WithField("Исполняемый файл", cmd.Path).
+				WithField("nOutErrFile", readErrFile()).
+				Error(errText)
+
+			return errors.New(errText)
+		} else {
+			return nil
+		}
+	}
 }
 
 //////////////// Common ///////////////////////
