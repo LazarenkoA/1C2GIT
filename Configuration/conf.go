@@ -371,6 +371,8 @@ func (this *Repository) run(cmd *exec.Cmd, fileLog string) (err error) {
 
 	select {
 	case <-time.After(timeout): // timeout
+		// завершмем процесс
+		cmd.Process.Kill()
 		return fmt.Errorf("Выполнение команды прервано по таймауту\n\tПараметры: %v\n\t", cmd.Args)
 	case err := <-errch:
 		if err != nil {
