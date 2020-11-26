@@ -72,12 +72,14 @@ func (this *Repository) createTmpFile() string {
 }
 
 // CreateTmpBD метод создает временную базу данных
-func (this *Repository) createTmpBD(createExtension bool) (error, string) {
+func (this *Repository) createTmpBD(createExtension bool) (err error, str string) {
 	tmpDBPath, _ := ioutil.TempDir("", "1c_DB_")
 
 	defer func() {
 		if er := recover(); er != nil {
-			logrus.Error(fmt.Errorf("Произошла ошибка при создании временной базы: %v", er))
+			err = fmt.Errorf("Произошла ошибка при создании временной базы: %v", er)
+			str = ""
+			logrus.Error(err)
 			os.RemoveAll(tmpDBPath)
 		}
 	}()
