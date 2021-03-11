@@ -72,7 +72,7 @@ func (this *Repository) createTmpFile() string {
 }
 
 // CreateTmpBD метод создает временную базу данных
-func (this *Repository) createTmpBD(createExtension bool) (err error, str string) {
+func (this *Repository) createTmpBD(createExtension bool) (str string, err error) {
 	tmpDBPath, _ := ioutil.TempDir("", "1c_DB_")
 
 	defer func() {
@@ -97,7 +97,7 @@ func (this *Repository) createTmpBD(createExtension bool) (err error, str string
 		Ext := filepath.Join(currentDir, "tmp.cfe")
 
 		if _, err := os.Stat(Ext); os.IsNotExist(err) {
-			return fmt.Errorf("В каталоге с программой не найден файл расширения tmp.cfe"), tmpDBPath
+			return tmpDBPath, fmt.Errorf("В каталоге с программой не найден файл расширения tmp.cfe")
 		}
 
 		param := []string{}
@@ -113,7 +113,7 @@ func (this *Repository) createTmpBD(createExtension bool) (err error, str string
 		}
 	}
 
-	return nil, tmpDBPath
+	return tmpDBPath, nil
 }
 
 // Выгрузка конфигурации в файлы
@@ -127,7 +127,7 @@ func (this *Repository) DownloadConfFiles(DataRep IRepository, version int) (err
 	logrus.Debug("Сохраняем конфигурацию в файлы")
 
 	var tmpDBPath string
-	if err, tmpDBPath = this.createTmpBD(DataRep.IsExtension()); err != nil {
+	if tmpDBPath, err = this.createTmpBD(DataRep.IsExtension()); err != nil {
 		return err
 	}
 	defer os.RemoveAll(tmpDBPath)
@@ -217,12 +217,12 @@ func (this *Repository) DumpConfigToFiles(DataRep IRepository, fileDBPath string
 	}
 }
 
-func (this *Repository) GetReport(DataRep IRepository, version int) (error, []*RepositoryInfo) {
+func (this *Repository) GetReport(DataRep IRepository, version int) ([]*RepositoryInfo, error) {
 	result := []*RepositoryInfo{}
 
 	report := this.saveReport(DataRep, version)
 	if report == "" {
-		return fmt.Errorf("Не удалось получить отчет по хранилищу"), result
+		return result, fmt.Errorf("Не удалось получить отчет по хранилищу")
 	}
 
 	// Двойные кавычки в комментарии мешают, по этому мы заменяем из на одинарные
@@ -276,7 +276,7 @@ func (this *Repository) GetReport(DataRep IRepository, version int) (error, []*R
 		result = append(result, RepInfo)
 	}
 
-	return nil, result
+	return result, nil
 }
 
 func (this *Repository) saveReport(DataRep IRepository, versionStart int) string {
@@ -293,7 +293,7 @@ func (this *Repository) saveReport(DataRep IRepository, versionStart int) string
 	defer os.Remove(fileLog)
 	defer os.Remove(fileResult)
 
-	err, tmpDBPath := this.createTmpBD(DataRep.IsExtension())
+	tmpDBPath, err := this.createTmpBD(DataRep.IsExtension())
 	if err != nil {
 		logrus.WithError(err).Errorf("Произошла ошибка создания временной базы.")
 		return ""

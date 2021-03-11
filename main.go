@@ -314,7 +314,7 @@ func start(wg *sync.WaitGroup, mu, mu2 *sync.Mutex, r *settings.RepositoryConf, 
 			WithField("Начальная ревизия", vInfo[r.GetRepPath()]).
 			Debug("Старт выгрузки")
 
-		err, report := rep.GetReport(r, vInfo[r.GetRepPath()]+1)
+		report,err := rep.GetReport(r, vInfo[r.GetRepPath()]+1)
 		if err != nil {
 			logrusRotate.StandardLogger().WithField("Репозиторий", r.GetRepPath()).Errorf("Ошибка получения отчета по хранилищу %v", err)
 			return
