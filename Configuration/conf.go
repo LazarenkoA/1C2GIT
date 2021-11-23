@@ -56,7 +56,7 @@ func (r *RepositoryInfo) GetDateTime() *time.Time {
 }
 
 func (this *Repository) New() *Repository {
-	//this.uuid, _ = uuid.NewV4()
+	//uuid, _ := uuid.NewV4()
 	return this
 }
 

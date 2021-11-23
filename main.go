@@ -22,6 +22,7 @@ import (
 	"path"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -57,9 +58,11 @@ func (h *Hook) Fire(En *logrus.Entry) error {
 	return nil
 }
 
+const(
+	limit int = 17
+)
 var (
 	LogLevel           *int
-	limit              int = 15
 	container          *di.Container
 	logchan            chan map[string]interface{}
 	mapUser            map[string]string
@@ -156,7 +159,14 @@ func httpInitialise() {
 		logrus.WithField("Path", indexhtml).Error("Не найден index.html")
 		return
 	}
-	tmpl := template.Must(template.ParseFiles(indexhtml))
+
+	tplFuncMap :=  make(template.FuncMap)
+	tplFuncMap["join"] = func(str []string, separator string) string { return strings.Join(str, separator) }
+	tmpl, err := template.New(path.Base(indexhtml)).Funcs(tplFuncMap).ParseFiles(indexhtml)
+	if err != nil {
+		logrusRotate.StandardLogger().WithError(err).Error("Ошибка парсинга шаблона")
+		panic(err)
+	}
 	var upgrader = websocket.Upgrader{
 		ReadBufferSize:  1024,
 		WriteBufferSize: 1024,
@@ -166,43 +176,64 @@ func httpInitialise() {
 	}
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		if err := container.Invoke(func(db *mgo.Database) {
+		type tData struct {
+			Log       []map[string]interface{}
+			СhartData []map[string]interface{}
+			СhartDataYear map[string][]string
+		}
+
+
+		f := func(db *mgo.Database) error {
 			var items []map[string]interface{}
 			var monthitems []map[string]interface{}
+			var yearitems []map[string]interface{}
 
 			startMonth := time.Date(time.Now().Year(), time.Now().Month(), 1, 0, 0, 0, 0, time.Local)
-			db.C("items").Find(bson.M{
-				"Time": bson.M{"$gt": startMonth, "$exists": true},
-			}).All(&monthitems)
+			startYear := time.Date(time.Now().Year(), 1, 1, 0, 0, 0, 0, time.Local)
 
-			logrusRotate.StandardLogger().WithField("start time", startMonth).Debug("Запрашиваем данные из БД. Получено данных ", len(monthitems))
-
-			// группируем по автору
-			monthitemsGroup := map[string]int{}
-			for _, v := range monthitems {
-				monthitemsGroup[strings.Trim(v["autor"].(string), " ")]++
+			// в монго фильтрация делается так {Time: {$gt: ISODate("2021-11-22")}} // для примера
+			if err := getDataStartDate(db, startMonth, &monthitems); err != nil {
+				return err
 			}
+			if err := getDataStartDate(db, startYear, &yearitems); err != nil {
+				return err
+			}
+
+			logrusRotate.StandardLogger().WithField("start time", startMonth).WithField("Получено данных", len(monthitems)).
+				Debug("Запрашиваем данные из БД за текущий месяц")
+			logrusRotate.StandardLogger().WithField("start time", startYear).WithField("Получено данных", len(yearitems)).
+				Debug("Запрашиваем данные из БД за год")
 
 			chartData := []map[string]interface{}{}
-			for k, v := range monthitemsGroup {
-				chartData = append(chartData, map[string]interface{}{"Name": k, "Count": v})
+			СhartDataYear := map[string][]string{}
+			for _, v := range monthitems {
+				chartData = append(chartData, map[string]interface{}{"Name": v["_id"].(map[string]interface{})["autor"].(string), "Count": v["count"].(int)})
+			}
+			for _, v := range yearitems {
+				autor := v["_id"].(map[string]interface{})["autor"].(string)
+				month := v["_id"].(map[string]interface{})["month"].(int)
+				count := v["count"].(int)
+
+				if _, ok := СhartDataYear[autor]; !ok {
+					СhartDataYear[autor] = make([]string, 12, 12)
+				}
+
+				СhartDataYear[autor][month-1] = strconv.Itoa(count)
 			}
 
-			// bson.M{} - это типа условия для поиска
 			if err := db.C("items").Find(bson.M{"Time": bson.M{"$exists": true}}).Sort("-Time").Limit(limit).All(&items); err == nil {
-				tmpl.Execute(w, struct {
-					Log       []map[string]interface{}
-					СhartData []map[string]interface{}
-				}{items, chartData})
+				tmpl.Execute(w, tData{items, chartData, СhartDataYear})
 			} else {
 				logrusRotate.StandardLogger().WithError(err).Error("Ошибка получения данных из БД")
+				return  err
 			}
-		}); err != nil {
+
+			return nil
+		}
+
+		if err := container.Invoke(f); err != nil {
 			container.Invoke(func(logBufer *[]map[string]interface{}) {
-				tmpl.Execute(w, struct {
-					Log       []map[string]interface{}
-					СhartData []map[string]interface{}
-				}{*logBufer, []map[string]interface{}{}})
+				tmpl.Execute(w, tData{*logBufer, []map[string]interface{}{}, map[string][]string{}})
 			})
 		}
 	})
@@ -256,6 +287,18 @@ func httpInitialise() {
 			cancel()
 		})
 	})
+}
+
+func getDataStartDate(db *mgo.Database, startDate time.Time, result interface{}) error {
+	group := []bson.M{
+		{"$match": bson.M{"Time": bson.M{"$gt": startDate, "$exists": true}}},
+		{"$group": bson.M{
+			"_id":  bson.M{"month": bson.M{"$month": "$Time"}, "autor": "$autor"},
+			"count": bson.M{"$sum": 1},
+		}},
+		{"$sort": bson.M{"_id": 1}},
+	}
+	return db.C("items").Pipe(group).All(result)
 }
 
 func writeInfo(str, autor, comment string, datetime time.Time, t msgtype) {
@@ -466,7 +509,8 @@ func connectToDB(s *settings.Setting) (*mgo.Database, error) {
 	if sess, err := mgo.Dial(s.Mongo.ConnectionString); err == nil {
 		return sess.DB("1C2GIT"), nil
 	} else {
-		logrusRotate.StandardLogger().WithError(err).Error("Ошибка подключения к MongoDB")
+		//logrusRotate.StandardLogger().WithError(err).Error("Ошибка подключения к MongoDB")
+		fmt.Println("Ошибка подключения к MongoDB:", err)
 		return nil, err
 	}
 }

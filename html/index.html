@@ -1,150 +1,231 @@
 <!DOCTYPE html>
 <html lang="en">
-    <head>
-        <!-- Required meta tags -->
-        <meta charset="utf-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<head>
+    <!-- Required meta tags -->
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
 
-        <title>1C2GIT</title>
-    
-        <!-- Bootstrap CSS -->
-        <link rel="stylesheet" href="/css/bootstrap.min.css">
-        <style>
-            /* .row { border-top: 1px solid silver;} */
-            .col-sm {padding-left: 25px; padding-right: 50px;}
-            .container { margin-left: 25px; margin-right: unset; padding: unset;}
-            .autor { font-size:0.7rem; text-align: right; color:#b1b3b1; }
-            .comment { font-size: .8rem;text-align: left;color:#b1b3b1; }
-            .chartjs-size-monitor { align-self: flex-end;}
-        </style>
+    <title>1C2GIT</title>
 
-        <!-- HTML content -->
-        <script type="text/javascript" src="/script/Chart.bundle.min.js"></script>
-        <script>
-            window.onload = function() {
-                backdata = document.getElementsByClassName('user');
-                if (backdata == null) {
-                    return;
-                }
-                labels = [];
-                data = [];
-                for (i = 0; i <= backdata.length-1; i++) {
-                    labels.push(backdata.item(i).getElementsByClassName("name").item(0).innerText);
-                    data.push(backdata.item(i).getElementsByClassName("count").item(0).innerText);
-                }
+    <!-- Bootstrap CSS -->
+    <link rel="stylesheet" href="./css/bootstrap.min.css">
+    <style>
+        /* .row { border-top: 1px solid silver;} */
+        .col-sm {
+            padding-left: 25px;
+            padding-right: 50px;
+        }
 
-                chartElement = document.getElementById('myChart')
-                if (chartElement == null) {
-                    return;
-                }
-                var ctx = chartElement.getContext('2d');
-                var myChart = new Chart(ctx, {
-                    type: 'bar',
-                    data: {
-                        labels:  labels,
-                        datasets: [{
-                            label: 'Количество за текущий месяц',
-                            data: data,
-                            backgroundColor: [
-                                'rgba(216, 27, 96, 0.6)',
-                                'rgba(3, 169, 244, 0.6)',
-                                'rgba(255, 152, 0, 0.6)',
-                                'rgba(107, 142, 35, 0.6)',
-                                'rgba(176, 224, 230, 0.6)',
-                                'rgba(240, 203, 134, 0.6)',
-                                'rgba(79, 0, 20, 0.6)',
-                                'rgba(255, 255, 25, 0.6)',
-                                'rgba(255, 168, 175, 0.6)'
-                            ],
-                            borderColor: [
-                                'rgba(216, 27, 96, 1)',
-                                'rgba(3, 169, 244, 1)',
-                                'rgba(255, 152, 0, 1)',
-                                'rgba(138, 184, 46, 0.6)',
-                                'rgba(216, 239, 242, 0.6)',
-                                'rgba(245, 221, 176, 0.6)',
-                                'rgba(184, 0, 46, 0.6)',
-                                'rgba(255, 255, 179, 0.6)',
-                                'rgba(255, 219, 222, 0.6)'
-                            ],
-                            borderWidth: 1
-                        }]
-                    },
-                    options: {
-                        legend: {
-                            display: false
-                        },
-                        title: {
-                            display: true,
-                            text: 'Количество коммитов',
-                            position: 'top',
-                            fontSize: 16,
-                            padding: 20
-                        },
-                        scales: {
-                            yAxes: [{
-                                ticks: {
-                                    min: 0,
-                                    max: Math.max.apply(null, data)
-                                }
-                            }]
-                        }
-                    }
+        .container {
+            margin-left: 25px;
+            margin-right: unset;
+            padding: unset;
+        }
+
+        .autor {
+            font-size: 0.7rem;
+            text-align: right;
+            color: #b1b3b1;
+        }
+
+        .comment {
+            font-size: .8rem;
+            text-align: left;
+            color: #b1b3b1;
+        }
+
+        .chartjs-size-monitor {
+            align-self: flex-end;
+        }
+    </style>
+
+    <!-- HTML content -->
+    <script type="text/javascript" src="./script/Chart.bundle.min.js"></script>
+
+    <script>
+        window.onload = function () {
+            let backdata = document.getElementsByClassName('user');
+            if (backdata == null) {
+                return;
+            }
+            let backdataYear = document.getElementsByClassName('dataYear');
+            if (backdataYear == null) {
+                return;
+            }
+
+            let labels = [];
+            let dataMonth = [];
+            let datasetsYear = [];
+            for (let i = 0; i <= backdata.length - 1; i++) {
+                labels.push(backdata.item(i).getElementsByClassName("name").item(0).innerText);
+                dataMonth.push(backdata.item(i).getElementsByClassName("count").item(0).innerText);
+            }
+            for (let i = 0; i <= backdataYear.length - 1; i++) {
+                let name = backdataYear.item(i).getElementsByClassName("name").item(0).innerText;
+                let data = backdataYear.item(i).getElementsByClassName("data").item(0).innerText;
+                datasetsYear.push({
+                    label: name,
+                    data: data.split(','),
+                    borderColor: '#' + (Math.random() * 0xFFFFFF << 0).toString(16),
+                    borderWidth: 2,
+                    fill: false
                 });
             }
-        </script>
-    </head>
+
+            let сhartMonthElement = document.getElementById('сhartMonth')
+            if (сhartMonthElement == null) {
+                return;
+            }
+            let сhartYearElement = document.getElementById('сhartYear')
+            if (сhartYearElement == null) {
+                return;
+            }
+            let ctx1 = сhartMonthElement.getContext('2d');
+            let ctx2 = сhartYearElement.getContext('2d');
+            var сhartMonth = new Chart(ctx1, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Количество за текущий месяц',
+                        data: dataMonth,
+                        backgroundColor: [
+                            'rgba(216, 27, 96, 0.6)',
+                            'rgba(3, 169, 244, 0.6)',
+                            'rgba(255, 152, 0, 0.6)',
+                            'rgba(107, 142, 35, 0.6)',
+                            'rgba(176, 224, 230, 0.6)',
+                            'rgba(240, 203, 134, 0.6)',
+                            'rgba(79, 0, 20, 0.6)',
+                            'rgba(255, 255, 25, 0.6)',
+                            'rgba(255, 168, 175, 0.6)'
+                        ],
+                        borderColor: [
+                            'rgba(216, 27, 96, 1)',
+                            'rgba(3, 169, 244, 1)',
+                            'rgba(255, 152, 0, 1)',
+                            'rgba(138, 184, 46, 0.6)',
+                            'rgba(216, 239, 242, 0.6)',
+                            'rgba(245, 221, 176, 0.6)',
+                            'rgba(184, 0, 46, 0.6)',
+                            'rgba(255, 255, 179, 0.6)',
+                            'rgba(255, 219, 222, 0.6)'
+                        ],
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    legend: {
+                        display: false
+                    },
+                    title: {
+                        display: true,
+                        text: 'Количество коммитов в текущем месяце',
+                        position: 'top',
+                        fontSize: 16,
+                        padding: 1
+                    },
+                    scales: {
+                        yAxes: [{
+                            ticks: {
+                                min: 0,
+                                max: Math.max.apply(null, dataMonth)
+                            }
+                        }]
+                    }
+                }
+            });
+
+            var сhartYear = new Chart(ctx2, {
+                type: 'line',
+                data: {
+                    labels: ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'],
+                    datasets: datasetsYear
+                },
+                options: {
+                    legend: {
+                        display: true,
+                        position: 'bottom'
+                    },
+                    title: {
+                        display: true,
+                        text: 'Количество коммитов в текущем году',
+                        position: 'top',
+                        fontSize: 16,
+                        padding: 1
+                    },
+
+                    scales: {
+                        y: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+        }
+    </script>
+</head>
 
 <body>
 
-    <div class="container" >
-        <div style="margin-bottom: 0px;">
-            <h1>1C2GIT</h1>
-            <p>Синхронизация хранилища 1С и Git</p>
-        </div>
+<div class="container">
+    <div style="margin-bottom: 0px;">
+        <h1>1C2GIT</h1>
+        <p>Синхронизация хранилища 1С и Git</p>
     </div>
+</div>
 
-    <div class="row">
-    <div class="col-sm" id="messages" >
+<div class="row">
+    <div class="col-sm" id="messages">
         {{range .Log}}
-        <div class="row" style="border-top: 1px solid silver; ">
-            <div class="col-sm" style="max-width: 5%">
-                {{if eq .type  1}}
-                    <img src="/img/error.png" width="16px" hight="15px" />
-                {{else}}
-                    <img src="/img/success.png" width="16px" hight="15px" />
-                {{end}}
-            </div>
-            <div class="col-sm">{{.msg}}
-                {{if ne .type  1}}
-                    <div class="comment">{{.comment}}</div>
-                {{end}}
-            </div>
-            <div>
-                <!-- Если ошибка автора не будет -->
-                {{if ne .type  1}}
-                <div class="autor">Автор: {{.autor}}</div>
-                {{end}}
-                <div class="autor">{{.datetime}}</div>
-            </div>
+            <div class="row" style="border-top: 1px solid silver; ">
+                <div class="col-sm" style="max-width: 5%">
+                    {{if eq .type  1}}
+                        <img src="./img/error.png" width="16px" hight="15px"/>
+                    {{else}}
+                        <img src="./img/success.png" width="16px" hight="15px"/>
+                    {{end}}
+                </div>
+                <div class="col-sm">{{.msg}}
+                    {{if ne .type  1}}
+                        <div class="comment">{{.comment}}</div>
+                    {{end}}
+                </div>
+                <div>
+                    <!-- Если ошибка автора не будет -->
+                    {{if ne .type  1}}
+                        <div class="autor">Автор: {{.autor}}</div>
+                    {{end}}
+                    <div class="autor">{{.datetime}}</div>
+                </div>
 
-        </div>
+            </div>
         {{end}}
     </div>
 
     {{ if gt (len .СhartData) 0 }}
         <div class="col-sm">
-            <canvas id="myChart"></canvas>
+            <canvas id="сhartMonth"></canvas>
+            <canvas id="сhartYear"></canvas>
         </div>
     {{end}}
 
 
-    <!-- В этом div данные для диаграммы -->
+    <!-- В этом div данные для диаграммы по тек. месяцу -->
     <div style="display: none">
         {{range .СhartData}}
             <div class="user">
-                <div class="name" >{{.Name}}</div>
-                <div class="count" >{{.Count}}</div>
+                <div class="name">{{.Name}}</div>
+                <div class="count">{{.Count}}</div>
+            </div>
+        {{end}}
+    </div>
+    <!-- В этом div данные для диаграммы по за год -->
+    <div style="display: none">
+        {{range $key, $value := .СhartDataYear}}
+            <div class="dataYear">
+                <div class="name">{{$key}}</div>
+                <div class="data">{{join $value ","}}</div>
             </div>
         {{end}}
     </div>
@@ -153,24 +234,23 @@
         function newMessage(msg) {
             msgNode = '<div class="col-sm" style="max-width: 5%">';
             if (msg.type == "1") {
-                 msgNode += '<img src="/img/error.png" width="16px" hight="15px" />';
+                msgNode += '<img src="./img/error.png" width="16px" hight="15px" />';
             } else {
-                msgNode += '<img src="/img/success.png" width="16px" hight="15px" />';
+                msgNode += '<img src="./img/success.png" width="16px" hight="15px" />';
             }
-            msgNode +='</div>';
-            msgNode += '<div class="col-sm">'+msg.msg;
+            msgNode += '</div>';
+            msgNode += '<div class="col-sm">' + msg.msg;
             if (msg.type != "1") {
-                msgNode += '<div class="comment">' +msg.comment + '</div>'
+                msgNode += '<div class="comment">' + msg.comment + '</div>'
             }
             msgNode += '</div>';
 
             if (msg.type != "1") {
                 msgNode += '<div>';
-                msgNode += '<div class="autor">Автор: ' +msg.autor+ '</div>';
-                msgNode += '<div class="autor">' +msg.datetime+ '</div>';
+                msgNode += '<div class="autor">Автор: ' + msg.autor + '</div>';
+                msgNode += '<div class="autor">' + msg.datetime + '</div>';
                 msgNode += '</div>';
             }
-
 
 
             var node = document.createElement("div");
@@ -179,7 +259,7 @@
 
             rows = document.getElementsByClassName("row")
             // выводим 15 элементов
-            for (var i = -(rows.length-1); i <= -15; i++) {
+            for (var i = -(rows.length - 1); i <= -15; i++) {
                 rows[-i].parentNode.removeChild(rows[-i]);
             }
 
@@ -189,7 +269,7 @@
 
         conn = new WebSocket("ws://dev-1c:2020/notifications");
         conn.onmessage = function (event) {
-            if(event.data != "") {
+            if (event.data != "") {
                 newMessage(JSON.parse(event.data));
             }
         };
