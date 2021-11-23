@@ -157,6 +157,9 @@
                 }
             });
 
+            let selecteddata = [];
+            let buckupData = [];
+
             var сhartYear = new Chart(ctx2, {
                 type: 'line',
                 data: {
@@ -180,6 +183,36 @@
                             this.chart.data.datasets.forEach((value, id, _) => {
                                 value.borderColor = mapColors.get(value.label);
                             });
+                            this.chart.update();
+                        },
+                        onClick: function(event, legendItem, legend){
+                            let isSecondClick = legendItem.hasOwnProperty("firstClick") && legendItem.firstClick !== undefined;
+                            if(!isSecondClick) {
+                                legendItem.firstClick = (new Date()).getTime();
+                                return
+                            }
+                            let isDouble = (new Date()).getTime() - legendItem.firstClick <= 500;
+                            if(isDouble) {
+                                // если данные уже отобраны, при втором дабл клике удаляем данные из массива
+                                let id = selecteddata.indexOf(legendItem.text);
+                                if(id >= 0) {
+                                    selecteddata.splice(id, 1)
+                                } else {
+                                    selecteddata.push(legendItem.text);
+                                }
+
+                                for (let i = 0; i <= this.chart.data.datasets.length - 1; i++) {
+                                    buckupData.push(this.chart.data.datasets[i].data)
+                                    if(selecteddata.length > 0 && !selecteddata.includes(this.chart.data.datasets[i].label)) {
+                                        // сохраняем, что б можно было восстановить
+                                        this.chart.data.datasets[i].data = []; // очищаем данные
+                                    } else {
+                                        this.chart.data.datasets[i].data = buckupData[i];
+                                    }
+                                }
+                            }
+
+                            legendItem.firstClick = undefined;
                             this.chart.update();
                         }
                     },
@@ -294,9 +327,8 @@
             node.innerHTML = msgNode;
 
             rows = document.getElementsByClassName("row")
-            // выводим 15 элементов
-            for (var i = -(rows.length - 1); i <= -15; i++) {
-                rows[-i].parentNode.removeChild(rows[-i]);
+            for (var i = rows.length - 1; i >= 17; i--) {
+                rows[i].parentNode.removeChild(rows[i]);
             }
 
             msgs = document.getElementById("messages")
