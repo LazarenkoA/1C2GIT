@@ -213,10 +213,10 @@
 
     <!-- В этом div данные для диаграммы по тек. месяцу -->
     <div style="display: none">
-        {{range .СhartData}}
+        {{range $key, $value := .СhartData}}
             <div class="user">
-                <div class="name">{{.Name}}</div>
-                <div class="count">{{.Count}}</div>
+                <div class="name">{{$key}}</div>
+                <div class="count">{{$value}}</div>
             </div>
         {{end}}
     </div>

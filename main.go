@@ -58,9 +58,10 @@ func (h *Hook) Fire(En *logrus.Entry) error {
 	return nil
 }
 
-const(
+const (
 	limit int = 17
 )
+
 var (
 	LogLevel           *int
 	container          *di.Container
@@ -160,8 +161,14 @@ func httpInitialise() {
 		return
 	}
 
-	tplFuncMap :=  make(template.FuncMap)
-	tplFuncMap["join"] = func(str []string, separator string) string { return strings.Join(str, separator) }
+	tplFuncMap := make(template.FuncMap)
+	tplFuncMap["join"] = func(data []int, separator string) string {
+		tmp := make([]string, len(data))
+		for i, v := range data {
+			tmp[i] = strconv.Itoa(v)
+		}
+		return strings.Join(tmp, separator)
+	}
 	tmpl, err := template.New(path.Base(indexhtml)).Funcs(tplFuncMap).ParseFiles(indexhtml)
 	if err != nil {
 		logrusRotate.StandardLogger().WithError(err).Error("Ошибка парсинга шаблона")
@@ -177,11 +184,10 @@ func httpInitialise() {
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		type tData struct {
-			Log       []map[string]interface{}
-			СhartData []map[string]interface{}
-			СhartDataYear map[string][]string
+			Log           []map[string]interface{}
+			СhartData     map[string]int
+			СhartDataYear map[string][]int
 		}
-
 
 		f := func(db *mgo.Database) error {
 			var items []map[string]interface{}
@@ -204,28 +210,30 @@ func httpInitialise() {
 			logrusRotate.StandardLogger().WithField("start time", startYear).WithField("Получено данных", len(yearitems)).
 				Debug("Запрашиваем данные из БД за год")
 
-			chartData := []map[string]interface{}{}
-			СhartDataYear := map[string][]string{}
+			chartData := map[string]int{}
+			chartDataYear := map[string][]int{}
 			for _, v := range monthitems {
-				chartData = append(chartData, map[string]interface{}{"Name": v["_id"].(map[string]interface{})["autor"].(string), "Count": v["count"].(int)})
+				autor := strings.Trim(v["_id"].(map[string]interface{})["autor"].(string), " ")
+				count := v["count"].(int)
+				chartData[autor] += count // если в имени пользователя есть пробел или был ранее, то субд вернет 2 записи по одному пользователю
 			}
 			for _, v := range yearitems {
-				autor := v["_id"].(map[string]interface{})["autor"].(string)
+				autor := strings.Trim(v["_id"].(map[string]interface{})["autor"].(string), " ")
 				month := v["_id"].(map[string]interface{})["month"].(int)
 				count := v["count"].(int)
 
-				if _, ok := СhartDataYear[autor]; !ok {
-					СhartDataYear[autor] = make([]string, 12, 12)
+				if _, ok := chartDataYear[autor]; !ok {
+					chartDataYear[autor] = make([]int, 12, 12)
 				}
 
-				СhartDataYear[autor][month-1] = strconv.Itoa(count)
+				chartDataYear[autor][month-1] += count
 			}
 
 			if err := db.C("items").Find(bson.M{"Time": bson.M{"$exists": true}}).Sort("-Time").Limit(limit).All(&items); err == nil {
-				tmpl.Execute(w, tData{items, chartData, СhartDataYear})
+				tmpl.Execute(w, tData{items, chartData, chartDataYear})
 			} else {
 				logrusRotate.StandardLogger().WithError(err).Error("Ошибка получения данных из БД")
-				return  err
+				return err
 			}
 
 			return nil
@@ -233,7 +241,7 @@ func httpInitialise() {
 
 		if err := container.Invoke(f); err != nil {
 			container.Invoke(func(logBufer *[]map[string]interface{}) {
-				tmpl.Execute(w, tData{*logBufer, []map[string]interface{}{}, map[string][]string{}})
+				tmpl.Execute(w, tData{*logBufer, map[string]int{}, map[string][]int{}})
 			})
 		}
 	})
@@ -293,7 +301,7 @@ func getDataStartDate(db *mgo.Database, startDate time.Time, result interface{})
 	group := []bson.M{
 		{"$match": bson.M{"Time": bson.M{"$gt": startDate, "$exists": true}}},
 		{"$group": bson.M{
-			"_id":  bson.M{"month": bson.M{"$month": "$Time"}, "autor": "$autor"},
+			"_id":   bson.M{"month": bson.M{"$month": "$Time"}, "autor": "$autor"},
 			"count": bson.M{"$sum": 1},
 		}},
 		{"$sort": bson.M{"_id": 1}},
@@ -357,7 +365,7 @@ func start(wg *sync.WaitGroup, mu, mu2 *sync.Mutex, r *settings.RepositoryConf, 
 			WithField("Начальная ревизия", vInfo[r.GetRepPath()]).
 			Debug("Старт выгрузки")
 
-		report,err := rep.GetReport(r, vInfo[r.GetRepPath()]+1)
+		report, err := rep.GetReport(r, vInfo[r.GetRepPath()]+1)
 		if err != nil {
 			logrusRotate.StandardLogger().WithField("Репозиторий", r.GetRepPath()).Errorf("Ошибка получения отчета по хранилищу %v", err)
 			return
