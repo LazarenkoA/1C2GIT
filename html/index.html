@@ -43,7 +43,7 @@
     <script type="text/javascript" src="./script/Chart.bundle.min.js"></script>
 
     <script>
-        window.onload = function () {
+         window.onload = function () {
             let backdata = document.getElementsByClassName('user');
             if (backdata == null) {
                 return;
@@ -60,16 +60,24 @@
                 labels.push(backdata.item(i).getElementsByClassName("name").item(0).innerText);
                 dataMonth.push(backdata.item(i).getElementsByClassName("count").item(0).innerText);
             }
+            let colors = ["#B22222", "#FF1493", "#FF8C00", "#8A2BE2", "#4B0082", "#32CD32", "#556B2F", "#008080", "#00FFFF", "#000080", "#778899"];
+            let mapColors = new Map();
+
             for (let i = 0; i <= backdataYear.length - 1; i++) {
                 let name = backdataYear.item(i).getElementsByClassName("name").item(0).innerText;
                 let data = backdataYear.item(i).getElementsByClassName("data").item(0).innerText;
+                let colorid = Math.floor(Math.random() * colors.length);
+                mapColors.set(name, colors[colorid])
+
                 datasetsYear.push({
                     label: name,
                     data: data.split(','),
-                    borderColor: '#' + (Math.random() * 0xFFFFFF << 0).toString(16),
+                    //borderColor: '#' + (Math.random() * 0xFFFFFF << 0).toString(16), полностью случайный цвет может выдавать близкие по оттенкам цвета
+                    borderColor: mapColors.get(name),
                     borderWidth: 2,
                     fill: false
                 });
+                colors.splice(colorid, 1);
             }
 
             let сhartMonthElement = document.getElementById('сhartMonth')
@@ -145,7 +153,22 @@
                 options: {
                     legend: {
                         display: true,
-                        position: 'bottom'
+                        position: 'bottom',
+                        onHover: function (evt, item, legend) {
+                            this.chart.data.datasets.forEach((value, id, _) => {
+                                if(value.label != item.text) { // && (!value.hasOwnProperty("change") || !value.change))
+                                    value.change = true;
+                                    value.borderColor = '#808080'; // LightenDarkenColor(item_.borderColor, -70);
+                                }
+                            });
+                            this.chart.update();
+                        },
+                        onLeave: function (evt, item, legend) {
+                            this.chart.data.datasets.forEach((value, id, _) => {
+                                value.borderColor = mapColors.get(value.label);
+                            });
+                            this.chart.update();
+                        }
                     },
                     title: {
                         display: true,
