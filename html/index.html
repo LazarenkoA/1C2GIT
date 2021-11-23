@@ -43,6 +43,19 @@
     <script type="text/javascript" src="./script/Chart.bundle.min.js"></script>
 
     <script>
+        function hexToRgbA(hex, alfa){
+            var c;
+            if(/^#([A-Fa-f0-9]{3}){1,2}$/.test(hex)){
+                c= hex.substring(1).split('');
+                if(c.length == 3){
+                    c= [c[0], c[0], c[1], c[1], c[2], c[2]];
+                }
+                c= '0x'+c.join('');
+                return 'rgba('+[(c>>16)&255, (c>>8)&255, c&255].join(',')+', ' +alfa + ')';
+            }
+            throw new Error('Bad Hex');
+        }
+
          window.onload = function () {
             let backdata = document.getElementsByClassName('user');
             if (backdata == null) {
@@ -60,7 +73,7 @@
                 labels.push(backdata.item(i).getElementsByClassName("name").item(0).innerText);
                 dataMonth.push(backdata.item(i).getElementsByClassName("count").item(0).innerText);
             }
-            let colors = ["#B22222", "#FF1493", "#FF8C00", "#8A2BE2", "#4B0082", "#32CD32", "#556B2F", "#008080", "#00FFFF", "#000080", "#778899"];
+            let colors = ["#B22222", "#FF1493", "#FF8C00", "#8A2BE2", "#4B0082", "#32CD32", "#556B2F", "#008080", "#00FFFF", "#000080"];
             let mapColors = new Map();
 
             for (let i = 0; i <= backdataYear.length - 1; i++) {
@@ -158,7 +171,7 @@
                             this.chart.data.datasets.forEach((value, id, _) => {
                                 if(value.label != item.text) { // && (!value.hasOwnProperty("change") || !value.change))
                                     value.change = true;
-                                    value.borderColor = '#808080'; // LightenDarkenColor(item_.borderColor, -70);
+                                    value.borderColor = hexToRgbA('#808080', 0.3); // LightenDarkenColor(item_.borderColor, -70);
                                 }
                             });
                             this.chart.update();
