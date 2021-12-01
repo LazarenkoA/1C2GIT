@@ -103,7 +103,7 @@ func (this *Repository) createTmpBD(createExtension bool) (str string, err error
 
 		param := []string{}
 		param = append(param, "DESIGNER")
-		param = append(param, fmt.Sprintf("/F '%v'", tmpDBPath))
+		param = append(param, fmt.Sprintf("/F %s", tmpDBPath))
 		param = append(param, fmt.Sprintf("/LoadCfg %v", Ext))
 		param = append(param, "-Extension temp")
 		param = append(param, fmt.Sprintf("/OUT  %v", fileLog))
@@ -151,7 +151,7 @@ func (this *Repository) ConfigurationRepositoryBindCfg(DataRep IRepository, file
 
 	param := []string{}
 	param = append(param, "DESIGNER")
-	param = append(param, fmt.Sprintf("/F '%v'", fileDBPath))
+	param = append(param, fmt.Sprintf("/F %v", fileDBPath))
 	param = append(param, "/DisableStartupDialogs")
 	param = append(param, "/DisableStartupMessages")
 	param = append(param, fmt.Sprintf("/ConfigurationRepositoryF %v", DataRep.GetRepPath()))
@@ -183,7 +183,7 @@ func (this *Repository) ConfigurationRepositoryUpdateCfg(DataRep IRepository, fi
 
 	param := []string{}
 	param = append(param, "DESIGNER")
-	param = append(param, fmt.Sprintf("/F '%v'", fileDBPath))
+	param = append(param, fmt.Sprintf("/F %v", fileDBPath))
 	param = append(param, "/DisableStartupDialogs")
 	param = append(param, "/DisableStartupMessages")
 	param = append(param, "/ConfigurationRepositoryUpdateCfg")
@@ -205,7 +205,7 @@ func (this *Repository) DumpConfigToFiles(DataRep IRepository, fileDBPath string
 
 	param := []string{}
 	param = append(param, "DESIGNER")
-	param = append(param, fmt.Sprintf("/F '%v'", fileDBPath))
+	param = append(param, fmt.Sprintf("/F %v", fileDBPath))
 	param = append(param, "/DisableStartupDialogs")
 	param = append(param, "/DisableStartupMessages")
 	param = append(param, fmt.Sprintf("/DumpConfigToFiles %v", DataRep.GetOutDir()))
@@ -305,7 +305,7 @@ func (this *Repository) saveReport(DataRep IRepository, versionStart int) string
 	param = append(param, "DESIGNER")
 	param = append(param, "/DisableStartupDialogs")
 	param = append(param, "/DisableStartupMessages")
-	param = append(param, fmt.Sprintf("/F '%v'", tmpDBPath))
+	param = append(param, fmt.Sprintf("/F %v", tmpDBPath))
 	//param = append(param, "/IBName Задание2")
 	param = append(param, fmt.Sprintf("/ConfigurationRepositoryF %v", DataRep.GetRepPath()))
 	param = append(param, fmt.Sprintf("/ConfigurationRepositoryN %v", DataRep.GetLogin()))
