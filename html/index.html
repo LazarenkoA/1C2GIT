@@ -272,7 +272,7 @@
         {{end}}
     </div>
 
-    {{ if gt (len .СhartData) 0 }}
+    {{ if or (gt (len .ChartData) 0) (gt (len .ChartDataYear) 0)}}
         <div class="col-sm">
             <canvas id="сhartMonth"></canvas>
             <canvas id="сhartYear"></canvas>
@@ -282,7 +282,7 @@
 
     <!-- В этом div данные для диаграммы по тек. месяцу -->
     <div style="display: none">
-        {{range $key, $value := .СhartData}}
+        {{range $key, $value := .ChartData}}
             <div class="user">
                 <div class="name">{{$key}}</div>
                 <div class="count">{{$value}}</div>
@@ -291,7 +291,7 @@
     </div>
     <!-- В этом div данные для диаграммы по за год -->
     <div style="display: none">
-        {{range $key, $value := .СhartDataYear}}
+        {{range $key, $value := .ChartDataYear}}
             <div class="dataYear">
                 <div class="name">{{$key}}</div>
                 <div class="data">{{join $value ","}}</div>

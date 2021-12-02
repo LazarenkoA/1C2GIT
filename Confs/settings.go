@@ -2,42 +2,43 @@ package settings
 
 import (
 	"bufio"
-	"encoding/json"
 	logrusRotate "github.com/LazarenkoA/LogrusRotate"
+	"gopkg.in/yaml.v2"
 	"io/ioutil"
 	"os"
 	"path"
-	"regexp"
-	"strconv"
+	"time"
 
-	xmlpath "gopkg.in/xmlpath.v2"
+	"gopkg.in/xmlpath.v2"
 )
 
+type Destination struct {
+	RepDir string `yaml:"RepDir"`
+	Branch string `yaml:"Branch"`
+}
+
 type RepositoryConf struct {
-	TimerMinute int `json:"TimerMinute"`
+	TimerMinute int `yaml:"TimerMinute"`
 	From        *struct {
-		Rep       string `json:"Rep"`
-		Login     string `json:"Login"`
-		Pass      string `json:"Pass"`
-		Extension bool   `json:"Extension"`
-	} `json:"From"`
-	To *struct {
-		RepDir string `json:"RepDir"`
-		Branch string `json:"Branch"`
-	} `json:"To"`
-	version string // для хранения версии конфигурации
+		Rep       string `yaml:"Rep"`
+		Login     string `yaml:"Login"`
+		Pass      string `yaml:"Pass"`
+		Extension bool   `yaml:"Extension"`
+	} `yaml:"From"`
+	To      *Destination `yaml:"To"`
+	version string       // для хранения версии конфигурации
 }
 
 type Setting struct {
-	Bin1C          string            `json:"Bin1C"`
-	RepositoryConf []*RepositoryConf `json:"RepositoryConf"`
+	Bin1C          string            `yaml:"Bin1C"`
+	RepositoryConf []*RepositoryConf `yaml:"RepositoryConf"`
 	Mongo          *struct {
-		ConnectionString string
-	} `json:"Mongo"`
+		ConnectionString string `yaml:"ConnectionString"`
+	} `yaml:"Mongo"`
 	TFS *struct {
-		URL string `json:"URL"`
-		KEY string `json:"KEY"`
-	} `json:"TFS"`
+		URL string `yaml:"URL"`
+		KEY string `yaml:"KEY"`
+	} `yaml:"TFS"`
 }
 
 func ReadSettings(Filepath string, data interface{}) {
@@ -50,7 +51,7 @@ func ReadSettings(Filepath string, data interface{}) {
 		logrusRotate.StandardLogger().WithField("файл", Filepath).WithError(err).Panic("Ошибка открытия файла")
 	}
 
-	err = json.Unmarshal(file, data)
+	err = yaml.Unmarshal(file, data)
 	if err != nil {
 		logrusRotate.StandardLogger().WithField("файл", Filepath).WithError(err).Panic("Ошибка чтения конфигурационного файла")
 	}
@@ -72,8 +73,12 @@ func (r *RepositoryConf) IsExtension() bool {
 	return r.From.Extension
 }
 
-func (r *RepositoryConf) GetOutDir() string {
-	return r.To.RepDir
+func (r *RepositoryConf) GetDestination() *Destination {
+	return r.To
+}
+
+func (r *RepositoryConf) GetTimerDuration() time.Duration {
+	return time.Minute * time.Duration(r.TimerMinute)
 }
 
 // legacy
@@ -99,8 +104,8 @@ func (this *RepositoryConf) SaveVersion() {
 		return
 	}
 
-	path := xmlpath.MustCompile("MetaDataObject/Configuration/Properties/Version/text()")
-	if value, ok := path.String(xmlroot); ok {
+	path_ := xmlpath.MustCompile("MetaDataObject/Configuration/Properties/Version/text()")
+	if value, ok := path_.String(xmlroot); ok {
 		this.version = value
 	} else {
 		// значит версии нет, установим начальную
@@ -110,47 +115,9 @@ func (this *RepositoryConf) SaveVersion() {
 
 }
 
-func (this *RepositoryConf) RestoreVersion(version int) {
-	logrusRotate.StandardLogger().WithField("Репозиторий", this.To.RepDir).WithField("Версия", this.version).Debug("Восстанавливаем версию расширения")
-
-	ConfigurationFile := path.Join(this.To.RepDir, "Configuration.xml")
-	if _, err := os.Stat(ConfigurationFile); os.IsNotExist(err) {
-		logrusRotate.StandardLogger().WithField("Файл", ConfigurationFile).WithField("Репозиторий", this.GetRepPath()).Error("Конфигурационный файл (Configuration.xml) не найден")
-		return
-	}
-
-	// Меняем версию, без парсинга, поменять значение одного узла прям проблема, а повторять структуру xml в структуре ой как не хочется
-	// Читаем файл
-	file, err := os.Open(ConfigurationFile)
-	if err != nil {
-		logrusRotate.StandardLogger().WithField("Файл", ConfigurationFile).Errorf("Ошибка открытия файла: %q", err)
-		return
-	}
-
-	stat, _ := file.Stat()
-	buf := make([]byte, stat.Size())
-	if _, err = file.Read(buf); err != nil {
-		logrusRotate.StandardLogger().WithField("Файл", ConfigurationFile).Errorf("Ошибка чтения файла: %q", err)
-		return
-	}
-	file.Close()
-	os.Remove(ConfigurationFile)
-
-	xml := string(buf)
-	reg := regexp.MustCompile(`(?i)(?:<Version>(.+?)<\/Version>|<Version\/>)`)
-	//xml = reg.ReplaceAllString(xml, "<Version>"+this.version+"</Version>")
-	xml = reg.ReplaceAllString(xml, "<Version>"+strconv.Itoa(version)+"</Version>")
-
-	// сохраняем файл
-	file, err = os.OpenFile(ConfigurationFile, os.O_CREATE, os.ModeExclusive)
-	if err != nil {
-		logrusRotate.StandardLogger().WithField("Файл", ConfigurationFile).Errorf("Ошибка создания: %q", err)
-		return
-	}
-	defer file.Close()
-
-	if _, err := file.WriteString(xml); err != nil {
-		logrusRotate.StandardLogger().WithField("Файл", ConfigurationFile).Errorf("Ошибка записи: %q", err)
-		return
-	}
+func (r *RepositoryConf) GetDir() string {
+	return r.To.RepDir
+}
+func (r *RepositoryConf) GetBranch() string {
+	return r.To.Branch
 }

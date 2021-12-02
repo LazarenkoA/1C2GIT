@@ -74,7 +74,7 @@ func (g *Git) Destroy() {
 	g.logger.WithField("Environ", os.Environ()).Debug("Восстанавливаем переменные окружения")
 }
 
-func (g *Git) Checkout(branch, repDir string, notLock bool) error {
+func (g *Git) Checkout(branch, repDir string) error {
 	g.logger.WithField("Каталог", g.repDir).Debug("Checkout")
 
 	// notLock нужен для того, что бы не заблокировать самого себя, например вызов такой
@@ -146,12 +146,12 @@ func (g *Git) Pull(branch string) (err error) {
 	g.logger.WithField("Каталог", g.repDir).Debug("Pull")
 
 	if _, err = os.Stat(g.repDir); os.IsNotExist(err) {
-		err = fmt.Errorf("Каталог %q Git репозитория не найден", g.repDir)
+		err = fmt.Errorf("каталог %q Git репозитория не найден", g.repDir)
 		g.logger.WithField("Каталог", g.repDir).Error(err)
 	}
 
 	if branch != "" {
-		g.Checkout(branch, g.repDir, true)
+		g.Checkout(branch, g.repDir)
 	}
 
 	cmd := exec.Command("git", "pull")
@@ -168,7 +168,7 @@ func (g *Git) Push() (err error) {
 	g.logger.WithField("Каталог", g.repDir).Debug("Push")
 
 	if _, err = os.Stat(g.repDir); os.IsNotExist(err) {
-		err = fmt.Errorf("Каталог %q Git репозитория не найден", g.repDir)
+		err = fmt.Errorf("каталог %q Git репозитория не найден", g.repDir)
 		g.logger.WithField("Каталог", g.repDir).Error(err)
 	}
 
@@ -187,7 +187,7 @@ func (g *Git) Add() (err error) {
 	g.logger.WithField("Каталог", g.repDir).Debug("Add")
 
 	if _, err = os.Stat(g.repDir); os.IsNotExist(err) {
-		err = fmt.Errorf("Каталог %q Git репозитория не найден", g.repDir)
+		err = fmt.Errorf("каталог %q Git репозитория не найден", g.repDir)
 		g.logger.WithField("Каталог", g.repDir).Error(err)
 	}
 
@@ -206,12 +206,12 @@ func (g *Git) ResetHard(branch string) (err error) {
 	g.logger.WithField("branch", branch).WithField("Каталог", g.repDir).Debug("ResetHard")
 
 	if _, err = os.Stat(g.repDir); os.IsNotExist(err) {
-		err = fmt.Errorf("Каталог %q Git репозитория не найден", g.repDir)
+		err = fmt.Errorf("каталог %q Git репозитория не найден", g.repDir)
 		g.logger.WithField("Каталог", g.repDir).Error(err)
 	}
 
 	if branch != "" {
-		g.Checkout(branch, g.repDir, true)
+		g.Checkout(branch, g.repDir)
 	}
 	g.logger.WithField("branch", branch).WithField("Каталог", g.repDir).Debug("fetch")
 
@@ -231,7 +231,7 @@ func (g *Git) optimization() (err error) {
 	g.logger.WithField("Каталог", g.repDir).Debug("optimization")
 
 	if _, err = os.Stat(g.repDir); os.IsNotExist(err) {
-		err = fmt.Errorf("Каталог %q Git репозитория не найден", g.repDir)
+		err = fmt.Errorf("каталог %q Git репозитория не найден", g.repDir)
 		g.logger.WithField("Каталог", g.repDir).Error(err)
 	}
 
@@ -253,7 +253,7 @@ func (g *Git) CommitAndPush(branch string) (err error) {
 	defer func() { g.logger.WithField("Каталог", g.repDir).Debug("end CommitAndPush") }()
 
 	if _, err = os.Stat(g.repDir); os.IsNotExist(err) {
-		err = fmt.Errorf("Каталог %q Git репозитория не найден", g.repDir)
+		err = fmt.Errorf("каталог %q Git репозитория не найден", g.repDir)
 		g.logger.WithField("Каталог", g.repDir).Error(err)
 	}
 
@@ -270,7 +270,7 @@ func (g *Git) CommitAndPush(branch string) (err error) {
 
 	date := g.data.GetDateTime().Format("2006.01.02 15:04:05")
 
-	param := []string{}
+	var param []string
 	param = append(param, "commit")
 	//param = append(param, "-a")
 	param = append(param, "--allow-empty-message")
@@ -311,7 +311,7 @@ func run(cmd *exec.Cmd, dir string) (string, error) {
 	// Гит странный, вроде информационное сообщение как "nothing to commit, working tree clean" присылает в Stderr и статус выполнения 1, ну еба...
 	// приходится костылить
 	if err != nil && !strings.Contains(stdout, "nothing to commit") {
-		errText := fmt.Sprintf("Произошла ошибка запуска:\n err:%v \n Параметры: %v", string(err.Error()), cmd.Args)
+		errText := fmt.Sprintf("произошла ошибка запуска:\n err:%v \n Параметры: %v", err.Error(), cmd.Args)
 		if stderr != "" {
 			errText += fmt.Sprintf("StdErr:%v \n", stderr)
 		}

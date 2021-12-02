@@ -4,233 +4,148 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	logrusRotate "github.com/LazarenkoA/LogrusRotate"
+	"golang.org/x/text/encoding"
+	"gopkg.in/yaml.v2"
 	"io/ioutil"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/sirupsen/logrus"
-	"golang.org/x/text/encoding"
-	"golang.org/x/text/encoding/charmap"
 )
 
-// команды для смены версии
-// "C:\Program Files\1cv8\8.3.13.1513\bin\1cv8.exe" DESIGNER /IBName БГУ /N Администратор /ConfigurationRepositoryF tcp://dev-1c/PTG_Common /ConfigurationRepositoryN Lazarenko /ConfigurationRepositoryP 1478951 /ConfigurationRepositoryBindCfg -Extension tmp -forceBindAlreadyBindedUser -forceReplaceCfg /OUT C:\!\1.txt
-// "C:\Program Files\1cv8\8.3.13.1513\bin\1cv8.exe" DESIGNER /IBName БГУ /N Администратор /ConfigurationRepositoryF tcp://dev-1c/PTG_Common /ConfigurationRepositoryN Lazarenko /ConfigurationRepositoryP 1478951 /ConfigurationRepositoryLock -Extension tmp -objects C:\!\objects.xml /OUT C:\!\1.txt
-// "C:\Program Files\1cv8\8.3.13.1513\bin\1cv8.exe" DESIGNER /DisableStartupDialogs /IBName БГУ /N Администратор /DumpConfigToFiles C:\!\ConfFiles -Extension tmp  /OUT C:\!\1.txt
-// "C:\Program Files\1cv8\8.3.13.1513\bin\1cv8.exe" DESIGNER /DisableStartupDialogs /IBName БГУ /N Администратор /LoadConfigFromFiles C:\!\ConfFiles -Extension tmp  /OUT C:\!\1.txt
 type Repository struct {
-	BinPath string
-	//tmpDBPath string
+	binPath string
+	logger  *logrus.Entry
+	mu      *sync.Mutex
 }
 
-type IRepository interface {
+type IRepositoryConf interface {
 	GetRepPath() string
 	GetLogin() string
 	GetPass() string
 	IsExtension() bool
-	GetOutDir() string
+	GetTimerDuration() time.Duration
+	GetDir() string
+	GetBranch() string
 }
 
-type RepositoryInfo struct {
+type Notify struct {
+	RepInfo IRepositoryConf
+	Comment string
 	Version int
 	Author  string
 	Date    time.Time
-	Comment string
+	Err     error
 }
 
-func (r *RepositoryInfo) GetComment() string {
-	return r.Comment
-}
+const (
+	temCfeName      = "temp"
+	versionFileName = "versions"
+)
 
-func (r *RepositoryInfo) GetAuthor() string {
-	return strings.Trim(r.Author, " ")
-}
+func (this *Repository) New(binPath string) *Repository {
+	this.binPath = binPath
+	this.logger = logrusRotate.StandardLogger().WithField("name", "Repository")
+	this.mu = new(sync.Mutex)
 
-func (r *RepositoryInfo) GetDateTime() *time.Time {
-	return &r.Date
-}
-
-func (this *Repository) New() *Repository {
-	//uuid, _ := uuid.NewV4()
 	return this
 }
 
+func (r *Notify) GetComment() string {
+	return r.Comment
+}
+
+func (r *Notify) GetAuthor() string {
+	return strings.Trim(r.Author, " ")
+}
+
+func (r *Notify) GetDateTime() *time.Time {
+	return &r.Date
+}
+
 func (this *Repository) createTmpFile() string {
+	//currentDir, _ := os.Getwd()
 	fileLog, err := ioutil.TempFile("", "OutLog_")
-
-	defer fileLog.Close() // Закрываем иначе в него 1С не сможет записать
-
 	if err != nil {
 		panic(fmt.Errorf("Ошибка получения временного файла:\n %v", err))
 	}
+
+	fileLog.Close() // Закрываем иначе в него 1С не сможет записать
 	return fileLog.Name()
 }
 
 // CreateTmpBD метод создает временную базу данных
-func (this *Repository) createTmpBD(createExtension bool) (str string, err error) {
-	tmpDBPath, _ := ioutil.TempDir("", "1c_DB_")
+func (this *Repository) createTmpBD(tmpDBPath string, withExtension bool) (err error) {
+	var Ext string
+
+	if withExtension {
+		currentDir, _ := os.Getwd()
+		Ext = filepath.Join(currentDir, "tmp.cfe")
+
+		if _, err := os.Stat(Ext); os.IsNotExist(err) {
+			return fmt.Errorf("В каталоге с программой не найден файл расширения tmp.cfe")
+		}
+	}
 
 	defer func() {
 		if er := recover(); er != nil {
-			err = fmt.Errorf("Произошла ошибка при создании временной базы: %v", er)
-			str = ""
-			logrus.Error(err)
+			err = fmt.Errorf("произошла ошибка при создании временной базы: %v", er)
+			this.logger.Error(err)
 			os.RemoveAll(tmpDBPath)
 		}
 	}()
 
 	fileLog := this.createTmpFile()
-	defer os.Remove(fileLog)
-
-	cmd := exec.Command(this.BinPath, "CREATEINFOBASE", fmt.Sprintf("File='%s'", tmpDBPath), fmt.Sprintf("/OUT %s", fileLog))
-
-	if err := this.run(cmd, fileLog); err != nil {
-		logrus.Panic(err)
-	}
-
-	if createExtension {
-		currentDir, _ := os.Getwd()
-		Ext := filepath.Join(currentDir, "tmp.cfe")
-
-		if _, err := os.Stat(Ext); os.IsNotExist(err) {
-			return tmpDBPath, fmt.Errorf("В каталоге с программой не найден файл расширения tmp.cfe")
-		}
-
-		param := []string{}
-		param = append(param, "DESIGNER")
-		param = append(param, fmt.Sprintf("/F %s", tmpDBPath))
-		param = append(param, fmt.Sprintf("/LoadCfg %v", Ext))
-		param = append(param, "-Extension temp")
-		param = append(param, fmt.Sprintf("/OUT  %v", fileLog))
-		cmd := exec.Command(this.BinPath, param...)
-
-		if err := this.run(cmd, fileLog); err != nil {
-			logrus.WithError(err).Panic("Ошибка загрузки расширения в базу.")
-		}
-	}
-
-	return tmpDBPath, nil
-}
-
-// Выгрузка конфигурации в файлы
-func (this *Repository) DownloadConfFiles(DataRep IRepository, version int) (err error) {
 	defer func() {
-		if er := recover(); er != nil {
-			err = fmt.Errorf("Произошла ошибка при сохранении конфигурации конфигурации в файлы: %v", er)
-		}
+		os.Remove(fileLog)
 	}()
 
-	logrus.Debug("Сохраняем конфигурацию в файлы")
+	var param []string
 
-	var tmpDBPath string
-	if tmpDBPath, err = this.createTmpBD(DataRep.IsExtension()); err != nil {
-		return err
+	if withExtension {
+		param = append(param, "DESIGNER")
+		param = append(param, "/F", tmpDBPath)
+		param = append(param, "/DisableStartupDialogs")
+		param = append(param, "/DisableStartupMessages")
+		param = append(param, "/LoadCfg", Ext)
+		param = append(param, "-Extension", temCfeName)
+	} else {
+		param = append(param, "CREATEINFOBASE")
+		param = append(param, fmt.Sprintf("File='%s'", tmpDBPath))
 	}
-	defer os.RemoveAll(tmpDBPath)
+	param = append(param, fmt.Sprintf("/OUT %v", fileLog))
 
-	// ПОДКЛЮЧАЕМ к ХРАНИЛИЩУ и ОБНОВЛЯЕМ ДО ОПРЕДЕЛЕННОЙ ВЕРСИИ
-	this.ConfigurationRepositoryBindCfg(DataRep, tmpDBPath, version)
+	cmd := exec.Command(this.binPath, param...)
+	if err := this.run(cmd, fileLog); err != nil {
+		this.logger.WithError(err).Panic("Ошибка создания информационной базы.")
+	}
 
-	// ОБНОВЛЯЕМ ДО ОПРЕДЕЛЕННОЙ ВЕРСИИ
-	//rep.ConfigurationRepositoryUpdateCfg(DataRep, tmpDBPath, version)
-
-	// СОХРАНЯЕМ В ФАЙЛЫ
-	this.DumpConfigToFiles(DataRep, tmpDBPath)
+	this.logger.Debug(fmt.Sprintf("Создана tempDB '%s'", tmpDBPath))
 
 	return nil
 }
 
-func (this *Repository) ConfigurationRepositoryBindCfg(DataRep IRepository, fileDBPath string, version int) {
-	fileLog := this.createTmpFile()
-	defer os.Remove(fileLog)
-
-	param := []string{}
-	param = append(param, "DESIGNER")
-	param = append(param, fmt.Sprintf("/F %v", fileDBPath))
-	param = append(param, "/DisableStartupDialogs")
-	param = append(param, "/DisableStartupMessages")
-	param = append(param, fmt.Sprintf("/ConfigurationRepositoryF %v", DataRep.GetRepPath()))
-	param = append(param, fmt.Sprintf("/ConfigurationRepositoryN %v", DataRep.GetLogin()))
-	param = append(param, fmt.Sprintf("/ConfigurationRepositoryP %v", DataRep.GetPass()))
-	param = append(param, "/ConfigurationRepositoryBindCfg")
-	param = append(param, "-forceBindAlreadyBindedUser")
-	param = append(param, "-forceReplaceCfg")
-	if DataRep.IsExtension() {
-		param = append(param, "-Extension temp")
-	}
-	param = append(param, "/ConfigurationRepositoryUpdateCfg")
-	param = append(param, fmt.Sprintf("-v %d", version))
-	param = append(param, "-force")
-	param = append(param, "-revised")
-	if DataRep.IsExtension() {
-		param = append(param, "-Extension temp")
-	}
-
-	param = append(param, fmt.Sprintf("/OUT %v", fileLog))
-	if err := this.run(exec.Command(this.BinPath, param...), fileLog); err != nil {
-		logrus.Panic(err)
-	}
-}
-
-func (this *Repository) ConfigurationRepositoryUpdateCfg(DataRep IRepository, fileDBPath string, version int) {
-	fileLog := this.createTmpFile()
-	defer os.Remove(fileLog)
-
-	param := []string{}
-	param = append(param, "DESIGNER")
-	param = append(param, fmt.Sprintf("/F %v", fileDBPath))
-	param = append(param, "/DisableStartupDialogs")
-	param = append(param, "/DisableStartupMessages")
-	param = append(param, "/ConfigurationRepositoryUpdateCfg")
-	param = append(param, fmt.Sprintf("-v %d", version))
-	param = append(param, "-force")
-	param = append(param, "-revised")
-	if DataRep.IsExtension() {
-		param = append(param, "-Extension temp")
-	}
-	param = append(param, fmt.Sprintf("/OUT %v", fileLog))
-	if err := this.run(exec.Command(this.BinPath, param...), fileLog); err != nil {
-		logrus.Panic(err)
-	}
-}
-
-func (this *Repository) DumpConfigToFiles(DataRep IRepository, fileDBPath string) {
-	fileLog := this.createTmpFile()
-	defer os.Remove(fileLog)
-
-	param := []string{}
-	param = append(param, "DESIGNER")
-	param = append(param, fmt.Sprintf("/F %v", fileDBPath))
-	param = append(param, "/DisableStartupDialogs")
-	param = append(param, "/DisableStartupMessages")
-	param = append(param, fmt.Sprintf("/DumpConfigToFiles %v", DataRep.GetOutDir()))
-	if DataRep.IsExtension() {
-		param = append(param, "-Extension temp")
-	}
-	param = append(param, fmt.Sprintf("/OUT %v", fileLog))
-	if err := this.run(exec.Command(this.BinPath, param...), fileLog); err != nil {
-		logrus.Panic(err)
-	}
-}
-
-func (this *Repository) GetReport(DataRep IRepository, version int) ([]*RepositoryInfo, error) {
-	result := []*RepositoryInfo{}
+func (this *Repository) getReport(DataRep IRepositoryConf, version int) ([]*Notify, error) {
+	var result []*Notify
 
 	report := this.saveReport(DataRep, version)
 	if report == "" {
-		return result, fmt.Errorf("Не удалось получить отчет по хранилищу")
+		return result, fmt.Errorf("получен пустой отчет по хранилищу %v", DataRep.GetRepPath())
 	}
 
 	// Двойные кавычки в комментарии мешают, по этому мы заменяем из на одинарные
 	report = strings.Replace(report, "\"\"", "'", -1)
 
-	tmpArray := [][]string{}
-	reg := regexp.MustCompile(`[\{]"#","([^"]+)["][\}]`)
+	var tmpArray [][]string
+	reg := regexp.MustCompile(`[{]"#","([^"]+)["][}]`)
 	matches := reg.FindAllStringSubmatch(report, -1)
 	for _, s := range matches {
 		if s[1] == "Версия:" {
@@ -244,7 +159,7 @@ func (this *Repository) GetReport(DataRep IRepository, version int) ([]*Reposito
 
 	r := strings.NewReplacer("\r", "", "\n", " ")
 	for _, array := range tmpArray {
-		RepInfo := new(RepositoryInfo)
+		RepInfo := &Notify{RepInfo: DataRep}
 		for id, s := range array {
 			switch s {
 			case "Версия:":
@@ -280,71 +195,73 @@ func (this *Repository) GetReport(DataRep IRepository, version int) ([]*Reposito
 	return result, nil
 }
 
-func (this *Repository) saveReport(DataRep IRepository, versionStart int) string {
+func (this *Repository) saveReport(DataRep IRepositoryConf, versionStart int) string {
 	defer func() {
 		if er := recover(); er != nil {
-			logrus.Error(fmt.Errorf("Произошла ошибка при получении истории из хранилища: %v", er))
+			this.logger.Error(fmt.Errorf("произошла ошибка при получении истории из хранилища: %v", er))
 		}
 	}()
 
-	logrus.Debug("Сохраняем отчет конфигурации в файл")
+	this.logger.Debug("Сохраняем отчет конфигурации в файл")
+
+	//currentDir, _ := os.Getwd()
+	tmpDBPath, _ := ioutil.TempDir("", "1c_DB_")
+	defer os.RemoveAll(tmpDBPath)
+
+	if err := this.createTmpBD(tmpDBPath, DataRep.IsExtension()); err != nil {
+		this.logger.WithError(err).Errorf("Произошла ошибка создания временной базы.")
+		return ""
+	}
 
 	fileLog := this.createTmpFile()
 	fileResult := this.createTmpFile()
-	defer os.Remove(fileLog)
-	defer os.Remove(fileResult)
+	defer func() {
+		os.Remove(fileLog)
+		os.Remove(fileResult)
+	}()
 
-	tmpDBPath, err := this.createTmpBD(DataRep.IsExtension())
-	if err != nil {
-		logrus.WithError(err).Errorf("Произошла ошибка создания временной базы.")
-		return ""
-	}
-	defer os.RemoveAll(tmpDBPath)
-
-	param := []string{}
+	var param []string
 	param = append(param, "DESIGNER")
 	param = append(param, "/DisableStartupDialogs")
 	param = append(param, "/DisableStartupMessages")
-	param = append(param, fmt.Sprintf("/F %v", tmpDBPath))
-	//param = append(param, "/IBName Задание2")
-	param = append(param, fmt.Sprintf("/ConfigurationRepositoryF %v", DataRep.GetRepPath()))
-	param = append(param, fmt.Sprintf("/ConfigurationRepositoryN %v", DataRep.GetLogin()))
-	param = append(param, fmt.Sprintf("/ConfigurationRepositoryP %v", DataRep.GetPass()))
-	param = append(param, fmt.Sprintf("/ConfigurationRepositoryReport %v", fileResult))
+	param = append(param, "/F", tmpDBPath)
+
+	param = append(param, "/ConfigurationRepositoryF", DataRep.GetRepPath())
+	param = append(param, "/ConfigurationRepositoryN", DataRep.GetLogin())
+	param = append(param, "/ConfigurationRepositoryP", DataRep.GetPass())
+	param = append(param, "/ConfigurationRepositoryReport", fileResult)
 	if versionStart > 0 {
 		param = append(param, fmt.Sprintf("-NBegin %d", versionStart))
 	}
 	if DataRep.IsExtension() {
-		param = append(param, "-Extension temp")
+		param = append(param, "-Extension", temCfeName)
 	}
-	param = append(param, fmt.Sprintf("/OUT %v", fileLog))
+	param = append(param, "/OUT", fileLog)
 
-	cmd := exec.Command(this.BinPath, param...)
+	cmd := exec.Command(this.binPath, param...)
+
 	if err := this.run(cmd, fileLog); err != nil {
-		logrus.Panic(err)
+		this.logger.Panic(err)
 	}
 
-	if err, bytes := ReadFile(fileResult, nil); err == nil {
-		return string(*bytes)
+	if b, err := this.readFile(fileResult, nil); err == nil {
+		return string(b)
 	} else {
-		logrus.Errorf("Произошла ошибка при чтерии отчета: %v", err)
+		this.logger.Errorf("Произошла ошибка при чтерии отчета: %v", err)
+		fmt.Printf("Произошла ошибка при чтерии отчета: %v", err)
 		return ""
 	}
-}
-
-func (this *Repository) Destroy() {
-	//os.RemoveAll(rep.tmpDBPath)
 }
 
 func (this *Repository) run(cmd *exec.Cmd, fileLog string) (err error) {
 	defer func() {
 		if er := recover(); er != nil {
 			err = fmt.Errorf("%v", er)
-			logrus.WithField("Параметры", cmd.Args).Errorf("Произошла ошибка при выполнении %q", cmd.Path)
+			this.logger.WithField("Параметры", cmd.Args).Errorf("Произошла ошибка при выполнении %q", cmd.Path)
 		}
 	}()
 
-	logrus.WithField("Исполняемый файл", cmd.Path).
+	this.logger.WithField("Исполняемый файл", cmd.Path).
 		WithField("Параметры", cmd.Args).
 		Debug("Выполняется команда пакетного запуска")
 
@@ -352,15 +269,6 @@ func (this *Repository) run(cmd *exec.Cmd, fileLog string) (err error) {
 	cmd.Stdout = new(bytes.Buffer)
 	cmd.Stderr = new(bytes.Buffer)
 	errch := make(chan error, 1)
-
-	readErrFile := func() string {
-		if err, buf := ReadFile(fileLog, charmap.Windows1251.NewDecoder()); err == nil {
-			return string(*buf)
-		} else {
-			logrus.Error(err)
-			return ""
-		}
-	}
 
 	err = cmd.Start()
 	if err != nil {
@@ -374,7 +282,7 @@ func (this *Repository) run(cmd *exec.Cmd, fileLog string) (err error) {
 
 	select {
 	case <-time.After(timeout): // timeout
-		// завершмем процесс
+		// завершаем процесс
 		cmd.Process.Kill()
 		return fmt.Errorf("Выполнение команды прервано по таймауту\n\tПараметры: %v\n\t", cmd.Args)
 	case err := <-errch:
@@ -384,9 +292,10 @@ func (this *Repository) run(cmd *exec.Cmd, fileLog string) (err error) {
 			if stderr != "" {
 				errText += fmt.Sprintf("StdErr:%v\n", stderr)
 			}
-			logrus.WithField("Исполняемый файл", cmd.Path).
-				WithField("nOutErrFile", readErrFile()).
-				Error(errText)
+
+			if buf, err := this.readFile(fileLog, nil); err == nil {
+				errText += string(buf)
+			}
 
 			return errors.New(errText)
 		} else {
@@ -395,69 +304,259 @@ func (this *Repository) run(cmd *exec.Cmd, fileLog string) (err error) {
 	}
 }
 
-//////////////// Common ///////////////////////
-func getSubDir(rootDir string) []string {
-	var result []string
-	f := func(path string, info os.FileInfo, err error) error {
-		if info.IsDir() {
-			result = append(result, path)
-		}
+func (this *Repository) getLastVersion(DataRep IRepositoryConf) (version int, err error) {
+	this.logger.Debug(fmt.Sprintf("Читаем последнюю синхронизированную версию для %v\n", DataRep.GetRepPath()))
 
-		return nil
+	this.mu.Lock()
+	defer this.mu.Unlock()
+
+	vInfo, err := this.readVersionsFile()
+	if err != nil {
+		this.logger.Error(fmt.Sprintf("Ошибка при чтении файла версий: %v\n", err))
+		return 0, err
 	}
 
-	filepath.Walk(rootDir, f)
-	return result
+	return vInfo[DataRep.GetRepPath()], nil
 }
 
-func FindFiles(rootDir, fileName string) (error, string) {
-	if _, err := os.Stat(rootDir); os.IsNotExist(err) {
-		return err, ""
+func (this *Repository) saveLastVersion(DataRep IRepositoryConf, newVersion int) (err error) {
+	this.logger.Debug(fmt.Sprintf("Записываем последнюю синхронизированную версию для %v (%v)\n", DataRep.GetRepPath(), newVersion))
+
+	this.mu.Lock()
+	defer this.mu.Unlock()
+
+	// при записи в общий файл может получится потеря данных, когда данные последовательно считываются, потом в своем потоке меняется своя версия расширения
+	// при записи в файл версия другого расширения затирается
+	// по этому, перед тем как записать, еще раз считываем с диска
+	vInfo, err := this.readVersionsFile()
+	if err != nil {
+		this.logger.Error(fmt.Sprintf("Ошибка при чтении файла версий: %v\n", err))
+		return err
 	}
 
-	Files, _ := GetFiles(rootDir)
+	vInfo[DataRep.GetRepPath()] = newVersion
 
-	for _, file := range Files {
-		if _, f := filepath.Split(file); f == fileName {
-			return nil, file
-		}
+	currentDir, _ := os.Getwd()
+	filePath := filepath.Join(currentDir, versionFileName)
+
+	b, err := yaml.Marshal(vInfo)
+	if err != nil {
+		err = fmt.Errorf("ошибка сериализации: %v", err)
+		this.logger.Error(fmt.Sprintf("Ошибка при записи файла версий: %v\n", err))
+		return
 	}
 
-	return fmt.Errorf("Файл %q не найден в каталоге %q", fileName, rootDir), ""
+	if err = ioutil.WriteFile(filePath, b, os.ModeAppend|os.ModePerm); err != nil {
+		err = fmt.Errorf("ошибка записи файла %q", filePath)
+		this.logger.Error(fmt.Sprintf("Ошибка при записи файла версий: %v\n", err))
+		return
+	}
+
+	return err
 }
 
-func GetFiles(DirPath string) ([]string, int64) {
-	var result []string
-	var size int64
-	f := func(path string, info os.FileInfo, err error) error {
-		if info.IsDir() || info.Size() == 0 {
-			return nil
-		} else {
-			result = append(result, path)
-			size += info.Size()
-		}
+func (this *Repository) Observe(repInfo IRepositoryConf, wg *sync.WaitGroup, notify func(*Notify, *Repository) error) {
+	defer wg.Done()
 
-		return nil
+	l := this.logger.WithField("Репозиторий", repInfo.GetRepPath())
+	if repInfo.GetTimerDuration().Minutes() <= 0 {
+		l.Error("для репазитория не определен параметр TimerMinute")
+		return
 	}
 
-	filepath.Walk(DirPath, f)
-	return result, size
+	timer := time.NewTicker(repInfo.GetTimerDuration())
+	defer timer.Stop()
+
+	for {
+		func() {
+			version, err := this.getLastVersion(repInfo)
+			if err != nil {
+				l.WithError(err).Error("ошибка получения последней синхронизированной версиии")
+				return
+			}
+
+			l.WithField("Начальная ревизия", version).Debug("Старт выгрузки")
+			report, err := this.getReport(repInfo, version+1)
+			if err != nil {
+				l.WithError(err).Error("ошибка получения отчета по хранилищу")
+				return
+			}
+			if len(report) == 0 {
+				l.Debug("новых версий не найдено")
+				return
+			}
+
+			for _, _report := range report {
+				if err := notify(_report, this); err == nil {
+					if e := this.saveLastVersion(repInfo, _report.Version); e != nil {
+						l.WithError(e).Error("ошибка обновления последней синхронизированной версиии")
+					}
+				}
+			}
+		}()
+
+		<-timer.C
+	}
 }
 
-func ReadFile(filePath string, Decoder *encoding.Decoder) (error, *[]byte) {
-	//dec := charmap.Windows1251.NewDecoder()
-
+func (this *Repository) readFile(filePath string, Decoder *encoding.Decoder) ([]byte, error) {
 	if fileB, err := ioutil.ReadFile(filePath); err == nil {
 		// Разные кодировки = разные длины символов.
 		if Decoder != nil {
 			newBuf := make([]byte, len(fileB)*2)
 			Decoder.Transform(newBuf, fileB, false)
 
-			return nil, &newBuf
+			return newBuf, nil
 		} else {
-			return nil, &fileB
+			return fileB, nil
 		}
 	} else {
-		return fmt.Errorf("Ошибка открытия файла %q:\n %v", filePath, err), nil
+		return []byte{}, fmt.Errorf("Ошибка открытия файла %q:\n %v", filePath, err)
+	}
+}
+
+func (this *Repository) RestoreVersion(n *Notify) {
+	l := this.logger.WithField("Репозиторий", n.RepInfo.GetDir()).WithField("Версия", n.Version)
+	l.Debug("Восстанавливаем версию расширения")
+
+	ConfigurationFile := path.Join(n.RepInfo.GetDir(), "Configuration.xml")
+	if _, err := os.Stat(ConfigurationFile); os.IsNotExist(err) {
+		l.WithField("Файл", ConfigurationFile).Error("конфигурационный файл не найден")
+		return
+	}
+
+	// Меняем версию, без парсинга, поменять значение одного узла прям проблема, а повторять структуру xml в структуре ой как не хочется
+	// Читаем файл
+	file, err := os.Open(ConfigurationFile)
+	if err != nil {
+		l.WithField("Файл", ConfigurationFile).Errorf("Ошибка открытия файла: %q", err)
+		return
+	}
+
+	stat, _ := file.Stat()
+	buf := make([]byte, stat.Size())
+	if _, err = file.Read(buf); err != nil {
+		l.WithField("Файл", ConfigurationFile).Errorf("Ошибка чтения файла: %q", err)
+		return
+	}
+	file.Close()
+	os.Remove(ConfigurationFile)
+
+	xml := string(buf)
+	reg := regexp.MustCompile(`(?i)(?:<Version>(.+?)</Version>|<Version/>)`)
+	//xml = reg.ReplaceAllString(xml, "<Version>"+this.version+"</Version>")
+	xml = reg.ReplaceAllString(xml, "<Version>"+strconv.Itoa(n.Version)+"</Version>")
+
+	// сохраняем файл
+	file, err = os.OpenFile(ConfigurationFile, os.O_CREATE, os.ModeExclusive)
+	if err != nil {
+		l.WithError(err).WithField("Файл", ConfigurationFile).Error("Ошибка создания")
+		return
+	}
+	defer file.Close()
+
+	if _, err := file.WriteString(xml); err != nil {
+		l.WithError(err).WithField("Файл", ConfigurationFile).Error("Ошибка записи")
+		return
+	}
+}
+
+func (this *Repository) readVersionsFile() (vInfo map[string]int, err error) {
+
+	currentDir, _ := os.Getwd()
+	filePath := filepath.Join(currentDir, versionFileName)
+	if _, err := os.Stat(filePath); os.IsNotExist(err) {
+		return nil, fmt.Errorf("файл версий не найден %q", filePath)
+	}
+
+	file, err := ioutil.ReadFile(filePath)
+	if err != nil {
+		return nil, fmt.Errorf("ошибка открытия файла версий %q", filePath)
+	}
+
+	vInfo = make(map[string]int, 0)
+	err = yaml.Unmarshal(file, &vInfo)
+	if err != nil {
+		return nil, fmt.Errorf("ошибка чтения файла весрий %q", filePath)
+	}
+
+	return vInfo, nil
+}
+
+// Выгрузка конфигурации в файлы
+func (this *Repository) DownloadConfFiles(repInfo IRepositoryConf, version int) (err error) {
+	defer func() {
+		if er := recover(); er != nil {
+			err = fmt.Errorf("произошла ошибка при сохранении конфигурации конфигурации в файлы: %v", er)
+		}
+	}()
+
+	this.logger.Debug("Сохраняем конфигурацию в файлы")
+
+	tmpDBPath, _ := ioutil.TempDir("", "1c_DB_")
+	defer os.RemoveAll(tmpDBPath)
+
+	if err = this.createTmpBD(tmpDBPath, repInfo.IsExtension()); err != nil {
+		return err
+	}
+
+	// ПОДКЛЮЧАЕМ к ХРАНИЛИЩУ и ОБНОВЛЯЕМ ДО ОПРЕДЕЛЕННОЙ ВЕРСИИ
+	this.configurationRepositoryBindCfg(repInfo, tmpDBPath, version)
+
+	// СОХРАНЯЕМ В ФАЙЛЫ
+	this.dumpConfigToFiles(repInfo, tmpDBPath)
+
+	return nil
+}
+
+func (this *Repository) configurationRepositoryBindCfg(DataRep IRepositoryConf, fileDBPath string, version int) {
+	fileLog := this.createTmpFile()
+	defer os.Remove(fileLog)
+
+	var param []string
+	param = append(param, "DESIGNER")
+	param = append(param, "/F", fileDBPath)
+	param = append(param, "/DisableStartupDialogs")
+	param = append(param, "/DisableStartupMessages")
+	param = append(param, "/ConfigurationRepositoryF", DataRep.GetRepPath())
+	param = append(param, "/ConfigurationRepositoryN", DataRep.GetLogin())
+	param = append(param, "/ConfigurationRepositoryP", DataRep.GetPass())
+	param = append(param, "/ConfigurationRepositoryBindCfg")
+	param = append(param, "-forceBindAlreadyBindedUser")
+	param = append(param, "-forceReplaceCfg")
+	if DataRep.IsExtension() {
+		param = append(param, "-Extension", temCfeName)
+	}
+
+	param = append(param, "/ConfigurationRepositoryUpdateCfg")
+	param = append(param, fmt.Sprintf("-v %d", version))
+	param = append(param, "-force")
+	param = append(param, "-revised")
+	if DataRep.IsExtension() {
+		param = append(param, "-Extension", temCfeName)
+	}
+
+	param = append(param, fmt.Sprintf("/OUT %v", fileLog))
+	if err := this.run(exec.Command(this.binPath, param...), fileLog); err != nil {
+		this.logger.Panic(err)
+	}
+}
+
+func (this *Repository) dumpConfigToFiles(DataRep IRepositoryConf, fileDBPath string) {
+	fileLog := this.createTmpFile()
+	defer os.Remove(fileLog)
+
+	var param []string
+	param = append(param, "DESIGNER")
+	param = append(param, "/F", fileDBPath)
+	param = append(param, "/DisableStartupDialogs")
+	param = append(param, "/DisableStartupMessages")
+	param = append(param, fmt.Sprintf("/DumpConfigToFiles %v", DataRep.GetDir()))
+	if DataRep.IsExtension() {
+		param = append(param, "-Extension", temCfeName)
+	}
+	param = append(param, fmt.Sprintf("/OUT %v", fileLog))
+	if err := this.run(exec.Command(this.binPath, param...), fileLog); err != nil {
+		this.logger.Panic(err)
 	}
 }

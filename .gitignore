@@ -2,11 +2,10 @@
 /*.exe
 
 /debug
-/Confs/Common.conf
 /PTG_ACC_Extention
 /PTG_SM_Extention
 /PTG_HRM_Extention
-/Confs/*.conf
+/Confs/*.yaml
 /PTG_HRM_Sheet_extension
 /PTG_Common
 /HRM_edu_extension
