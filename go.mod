@@ -10,9 +10,8 @@ require (
 	github.com/gorilla/websocket v1.4.2
 	github.com/sirupsen/logrus v1.7.0
 	go.uber.org/dig v1.10.0
-	golang.org/x/net v0.0.0-20200930145003-4acb6c075d10 // indirect
-	golang.org/x/sys v0.1.0 // indirect
-	golang.org/x/text v0.3.3
+	golang.org/x/net v0.7.0 // indirect
+	golang.org/x/text v0.7.0
 	gopkg.in/alecthomas/kingpin.v2 v2.2.6
 	gopkg.in/mgo.v2 v2.0.0-20190816093944-a6b53ec6cb22
 	gopkg.in/xmlpath.v2 v2.0.0-20150820204837-860cbeca3ebc
